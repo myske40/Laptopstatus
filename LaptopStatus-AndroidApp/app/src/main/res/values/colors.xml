@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Redesign: permukaan datar (tanpa gradient kaca). Nama warna lama dipertahankan agar kode Kotlin tetap jalan. -->
+<resources>
+    <color name="bg">#090F18</color>
+    <color name="surface">#111923</color>
+    <color name="surface_raised">#182230</color>
+    <color name="panel">#111923</color>
+    <color name="panel2">#182230</color>
+    <color name="line">#14FFFFFF</color>
+    <color name="text_main">#F1F6FC</color>
+    <color name="text_dim">#A9B7C7</color>
+    <color name="accent">#72E4BF</color>
+    <color name="accent_on">#081710</color>
+    <color name="accent_bg">#2472E4BF</color>
+    <color name="accent_ripple">#3372E4BF</color>
+    <color name="glass_fill">#12FFFFFF</color>
+    <color name="glass_line">#14FFFFFF</color>
+    <color name="quiet_button">#12FFFFFF</color>
+    <color name="danger_button">#29E5626C</color>
+    <color name="warn">#E8A944</color>
+    <color name="danger">#E5626C</color>
+    <color name="memory_apps">#72E4BF</color>
+    <color name="memory_cache">#4BA3D3</color>
+    <color name="memory_pool">#E9AC4B</color>
+    <color name="memory_available">#303B48</color>
+</resources>

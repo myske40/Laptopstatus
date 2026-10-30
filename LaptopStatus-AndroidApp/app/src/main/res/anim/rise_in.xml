@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Kartu naik dari bawah. Dipakai bergantian (delay 70-90 ms per kartu) saat dashboard muncul. -->
+<set xmlns:android="http://schemas.android.com/apk/res/android" android:interpolator="@interpolator/ios_spring">
+    <translate android:fromYDelta="8%" android:toYDelta="0" android:duration="700" />
+    <alpha android:fromAlpha="0" android:toAlpha="1" android:duration="500" />
+</set>

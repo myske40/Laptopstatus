@@ -1,0 +1,93 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.LaptopStatus" parent="Theme.MaterialComponents.DayNight.NoActionBar">
+        <item name="android:windowBackground">@color/bg</item>
+        <item name="android:statusBarColor">@color/bg</item>
+        <item name="android:navigationBarColor">@color/bg</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="colorPrimary">@color/accent</item>
+        <item name="colorPrimaryDark">@color/bg</item>
+        <item name="colorAccent">@color/accent</item>
+        <item name="colorControlActivated">@color/accent</item>
+        <item name="colorControlNormal">@color/text_dim</item>
+        <item name="android:colorControlActivated">@color/accent</item>
+        <item name="android:colorControlNormal">@color/text_dim</item>
+        <item name="colorSurface">@color/surface_raised</item>
+        <item name="colorOnSurface">@color/text_main</item>
+        <item name="android:colorBackgroundFloating">@color/surface_raised</item>
+        <item name="android:textColorPrimary">@color/text_main</item>
+        <item name="android:textColorSecondary">@color/text_dim</item>
+        <item name="android:colorAccent">@color/accent</item>
+        <item name="alertDialogTheme">@style/ThemeOverlay.LaptopStatus.Dialog</item>
+        <item name="android:datePickerDialogTheme">@style/Theme.LaptopStatus.DatePickerDialog</item>
+        <item name="android:timePickerDialogTheme">@style/Theme.LaptopStatus.TimePickerDialog</item>
+        <item name="materialButtonStyle">@style/Widget.LaptopStatus.Button</item>
+    </style>
+
+    <style name="Theme.LaptopStatus.Classic" parent="Theme.LaptopStatus">
+        <item name="android:windowBackground">@drawable/bg_app_classic</item>
+        <item name="android:statusBarColor">#080D14</item>
+        <item name="android:navigationBarColor">#080D14</item>
+        <item name="colorPrimary">#72E4BF</item>
+        <item name="colorAccent">#72E4BF</item>
+    </style>
+
+    <!-- AppCompat confirmations and choice lists should stay legible on the app's dark canvas. -->
+    <style name="ThemeOverlay.LaptopStatus.Dialog" parent="ThemeOverlay.MaterialComponents.MaterialAlertDialog">
+        <item name="colorSurface">@color/surface_raised</item>
+        <item name="colorOnSurface">@color/text_main</item>
+        <item name="android:colorBackgroundFloating">@color/surface_raised</item>
+        <item name="android:textColorPrimary">@color/text_main</item>
+        <item name="android:textColorSecondary">@color/text_dim</item>
+        <item name="colorAccent">@color/accent</item>
+        <item name="android:colorAccent">@color/accent</item>
+    </style>
+
+    <!-- Native Android date and time pickers need their own dark dialog themes. -->
+    <style name="Theme.LaptopStatus.DatePickerDialog" parent="android:Theme.Material.Dialog.Alert">
+        <item name="android:colorAccent">@color/accent</item>
+        <item name="android:colorBackground">@color/surface_raised</item>
+        <item name="android:colorBackgroundFloating">@color/surface_raised</item>
+        <item name="android:textColorPrimary">@color/text_main</item>
+        <item name="android:textColorSecondary">@color/text_dim</item>
+    </style>
+
+    <style name="Theme.LaptopStatus.TimePickerDialog" parent="android:Theme.Material.Dialog.Alert">
+        <item name="android:colorAccent">@color/accent</item>
+        <item name="android:colorBackground">@color/surface_raised</item>
+        <item name="android:colorBackgroundFloating">@color/surface_raised</item>
+        <item name="android:textColorPrimary">@color/text_main</item>
+        <item name="android:textColorSecondary">@color/text_dim</item>
+    </style>
+
+    <!-- Tombol utama: datar, sudut 16dp, mengecil halus saat ditekan. -->
+    <style name="Widget.LaptopStatus.Button" parent="Widget.MaterialComponents.Button">
+        <item name="cornerRadius">16dp</item>
+        <item name="android:minHeight">50dp</item>
+        <item name="android:textAllCaps">false</item>
+        <item name="android:textStyle">bold</item>
+        <item name="android:textSize">14sp</item>
+        <item name="android:textColor">@color/accent_on</item>
+        <item name="backgroundTint">@color/accent</item>
+        <item name="rippleColor">@color/accent_ripple</item>
+        <item name="android:stateListAnimator">@animator/press_scale</item>
+    </style>
+
+    <style name="Widget.LaptopStatus.Button.Quiet" parent="Widget.MaterialComponents.Button.OutlinedButton">
+        <item name="cornerRadius">16dp</item>
+        <item name="android:minHeight">50dp</item>
+        <item name="android:textAllCaps">false</item>
+        <item name="android:textStyle">bold</item>
+        <item name="android:textSize">14sp</item>
+        <item name="android:textColor">@color/text_main</item>
+        <item name="backgroundTint">@color/quiet_button</item>
+        <item name="strokeWidth">0dp</item>
+        <item name="rippleColor">@color/accent_ripple</item>
+        <item name="android:stateListAnimator">@animator/press_scale</item>
+    </style>
+
+    <style name="Widget.LaptopStatus.Button.Danger" parent="Widget.LaptopStatus.Button.Quiet">
+        <item name="backgroundTint">@color/danger_button</item>
+        <item name="android:textColor">#FFB3B9</item>
+    </style>
+</resources>

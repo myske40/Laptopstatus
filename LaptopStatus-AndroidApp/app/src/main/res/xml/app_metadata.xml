@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<AppFunctionAppMetadata xmlns:appfn="http://schemas.android.com/apk/androidx.appfunctions"
+    appfn:description="Provides read-only Windows laptop status and process search, and opens Laptop Status screens on user request. Joke mode is never activated by an AppFunction; it only opens the app's explicit confirmation dialog. Power and Joke Mode requests only open an explicit confirmation in the app; they do not send commands directly. No screen input or process termination functions are exposed. Configure and pair the laptop in the app before using remote status or process search."
+    appfn:displayDescription="Pantau laptop Windows dan cari proses dari Gemini." />

@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AssemblyName>LaptopStatus-Setup</AssemblyName>
+    <RootNamespace>LaptopStatusSetup</RootNamespace>
+    <Company>PT HAHA NASIONAL</Company>
+    <Authors>PT HAHA NASIONAL</Authors>
+    <Product>Laptop Status Setup</Product>
+    <Copyright>Copyright © 2026 PT HAHA NASIONAL</Copyright>
+    <Version>2.13.0</Version>
+    <AssemblyVersion>2.13.0.0</AssemblyVersion>
+    <FileVersion>2.13.0.0</FileVersion>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationIcon>..\LaptopStatus-WindowsApp\Assets\laptop-status.ico</ApplicationIcon>
+  </PropertyGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="payload\LaptopStatusPayload.zip" LogicalName="LaptopStatus.Payload.zip" />
+    <EmbeddedResource Include="..\LaptopStatus-WindowsApp\Assets\laptop-status.ico" LogicalName="LaptopStatus.Brand.ico" />
+  </ItemGroup>
+</Project>

@@ -1,0 +1,99 @@
+<?xml version="1.0" encoding="utf-8"?>
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+    <capability android:name="actions.intent.OPEN_APP_FEATURE">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetPackage="com.example.laptopstatus"
+            android:targetClass="com.example.laptopstatus.MainActivity">
+            <parameter android:name="feature" android:key="assistant_feature" />
+        </intent>
+    </capability>
+
+    <capability android:name="actions.intent.GET_THING">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetPackage="com.example.laptopstatus"
+            android:targetClass="com.example.laptopstatus.MainActivity">
+            <parameter android:name="thing.name" android:key="assistant_query" />
+        </intent>
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetPackage="com.example.laptopstatus"
+            android:targetClass="com.example.laptopstatus.MainActivity" />
+    </capability>
+
+    <shortcut
+        android:shortcutId="assistant_status"
+        android:shortcutShortLabel="@string/shortcut_status"
+        android:shortcutLongLabel="@string/shortcut_status_long">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetPackage="com.example.laptopstatus"
+            android:targetClass="com.example.laptopstatus.MainActivity">
+            <extra android:name="assistant_feature" android:value="status" />
+        </intent>
+        <capability-binding android:key="actions.intent.OPEN_APP_FEATURE">
+            <parameter-binding android:key="feature" android:value="assistant_status" />
+        </capability-binding>
+    </shortcut>
+
+    <shortcut
+        android:shortcutId="assistant_processes"
+        android:shortcutShortLabel="@string/shortcut_processes"
+        android:shortcutLongLabel="@string/shortcut_processes_long">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetPackage="com.example.laptopstatus"
+            android:targetClass="com.example.laptopstatus.MainActivity">
+            <extra android:name="assistant_feature" android:value="processes" />
+        </intent>
+        <capability-binding android:key="actions.intent.OPEN_APP_FEATURE">
+            <parameter-binding android:key="feature" android:value="assistant_processes" />
+        </capability-binding>
+    </shortcut>
+
+    <shortcut
+        android:shortcutId="assistant_history"
+        android:shortcutShortLabel="@string/shortcut_history"
+        android:shortcutLongLabel="@string/shortcut_history_long">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetPackage="com.example.laptopstatus"
+            android:targetClass="com.example.laptopstatus.MainActivity">
+            <extra android:name="assistant_feature" android:value="history" />
+        </intent>
+        <capability-binding android:key="actions.intent.OPEN_APP_FEATURE">
+            <parameter-binding android:key="feature" android:value="assistant_history" />
+        </capability-binding>
+    </shortcut>
+
+    <shortcut
+        android:shortcutId="assistant_joke"
+        android:shortcutShortLabel="@string/shortcut_joke"
+        android:shortcutLongLabel="@string/shortcut_joke_long">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetPackage="com.example.laptopstatus"
+            android:targetClass="com.example.laptopstatus.MainActivity">
+            <extra android:name="assistant_feature" android:value="joke" />
+        </intent>
+        <capability-binding android:key="actions.intent.OPEN_APP_FEATURE">
+            <parameter-binding android:key="feature" android:value="assistant_joke" />
+        </capability-binding>
+    </shortcut>
+
+    <shortcut
+        android:shortcutId="assistant_connection"
+        android:shortcutShortLabel="@string/shortcut_connection"
+        android:shortcutLongLabel="@string/shortcut_connection_long">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetPackage="com.example.laptopstatus"
+            android:targetClass="com.example.laptopstatus.MainActivity">
+            <extra android:name="assistant_feature" android:value="connection" />
+        </intent>
+        <capability-binding android:key="actions.intent.OPEN_APP_FEATURE">
+            <parameter-binding android:key="feature" android:value="assistant_connection" />
+        </capability-binding>
+    </shortcut>
+</shortcuts>

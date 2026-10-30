@@ -1,0 +1,1308 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:id="@+id/activityRoot"
+    android:background="@drawable/bg_app">
+
+    <LinearLayout
+        android:id="@+id/appRoot"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:orientation="vertical"
+        android:background="@drawable/bg_app">
+
+    <!-- Header -->
+    <LinearLayout
+        android:id="@+id/appHeader"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:paddingHorizontal="22dp"
+        android:paddingTop="20dp"
+        android:paddingBottom="12dp">
+
+        <ImageView
+            android:layout_width="22dp"
+            android:layout_height="22dp"
+            android:src="@drawable/ic_laptop"
+            android:contentDescription="@null" />
+
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:layout_marginStart="10dp"
+            android:orientation="vertical">
+            <TextView
+                android:id="@+id/pageTitle"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Perangkat"
+                android:textColor="@color/text_main"
+                android:textSize="24sp"
+                android:textStyle="bold"
+                android:letterSpacing="-0.02" />
+            <TextView
+                android:id="@+id/pageSubtitle"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Pantau dan kendalikan laptop"
+                android:textColor="@color/text_dim"
+                android:textSize="11sp"
+                android:layout_marginTop="2dp" />
+        </LinearLayout>
+
+        <TextView
+            android:id="@+id/statusPill"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:background="@drawable/bg_pill_off"
+            android:text="Menunggu"
+            android:textColor="@color/text_dim"
+            android:textSize="12sp"
+            android:textStyle="bold"
+            android:paddingHorizontal="12dp"
+            android:paddingVertical="7dp" />
+    </LinearLayout>
+
+        <ScrollView
+        android:id="@+id/contentScroll"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:clipToPadding="false"
+        android:overScrollMode="never">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:padding="20dp"
+            android:id="@+id/contentContainer"
+        >
+
+            <!-- Device card -->
+            <LinearLayout
+                android:id="@+id/deviceSummaryCard"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:background="@drawable/bg_card"
+                android:padding="18dp"
+                android:clipToOutline="true">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical"
+                    android:layout_marginBottom="14dp">
+
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:orientation="vertical">
+
+                        <TextView
+                            android:id="@+id/deviceName"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="Laptop — Kerja"
+                            android:textColor="@color/text_main"
+                            android:textSize="15sp"
+                            android:textStyle="bold" />
+
+                        <TextView
+                            android:id="@+id/deviceSub"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="Belum terhubung"
+                            android:textColor="@color/text_dim"
+                            android:textSize="12sp"
+                            android:layout_marginTop="2dp" />
+                    </LinearLayout>
+
+                </LinearLayout>
+
+                <LinearLayout
+                    android:id="@+id/metricRingRow"
+                    android:layout_width="match_parent"
+                    android:layout_height="126dp"
+                    android:orientation="horizontal"
+                    android:gravity="center"
+                    android:layout_marginTop="2dp" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:id="@+id/screenControlPanel"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:background="@drawable/bg_card"
+                android:padding="16dp"
+                android:layout_marginTop="16dp">
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Kendali Layar"
+                    android:textColor="@color/text_main"
+                    android:textSize="15sp"
+                    android:textStyle="bold" />
+                <TextView
+                    android:id="@+id/screenControlStatus"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="Belum ada sesi. Pemilik laptop perlu menyetujui."
+                    android:textColor="@color/text_dim"
+                    android:textSize="12sp"
+                    android:layout_marginTop="4dp"
+                    android:layout_marginBottom="10dp" />
+                <Button
+                    android:id="@+id/screenFullscreenButton"
+                    style="@style/Widget.LaptopStatus.Button.Quiet"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginBottom="8dp"
+                    android:text="Tampilkan layar penuh · lanskap"
+                    android:visibility="gone" />
+                <ImageView
+                    android:id="@+id/screenPreview"
+                    android:layout_width="match_parent"
+                    android:layout_height="300dp"
+                    android:background="@drawable/bg_preview"
+                    android:contentDescription="Tampilan layar Windows"
+                    android:scaleType="fitCenter"
+                    android:clipToOutline="true"
+                    android:visibility="gone" />
+                <EditText
+                    android:id="@+id/screenTextInput"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:hint="Teks untuk diketik di Windows"
+                    android:background="@drawable/bg_input"
+                    android:paddingHorizontal="14dp"
+                    android:paddingVertical="10dp"
+                    android:inputType="textCapSentences|textMultiLine"
+                    android:minLines="1"
+                    android:maxLines="3"
+                    android:textColor="@color/text_main"
+                    android:textColorHint="@color/text_dim"
+                    android:visibility="gone" />
+                <Button
+                    android:id="@+id/screenRequestButton"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="Minta kendali layar" />
+                <Button
+                    android:id="@+id/screenSendTextButton"
+                    style="@style/Widget.LaptopStatus.Button.Quiet"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="6dp"
+                    android:text="Kirim teks"
+                    android:visibility="gone" />
+                <Button
+                    android:id="@+id/screenStopButton"
+                    style="@style/Widget.LaptopStatus.Button.Quiet"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="6dp"
+                    android:text="Hentikan sesi"
+                    android:visibility="gone" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:id="@+id/memoryPanel"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:background="@drawable/bg_card"
+                android:padding="16dp"
+                android:layout_marginTop="16dp">
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal">
+                    <TextView
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:text="Memori"
+                        android:textColor="@color/text_main"
+                        android:textStyle="bold"
+                        android:textSize="15sp" />
+                    <Button
+                        android:id="@+id/refreshMemoryButton"
+                        style="@style/Widget.LaptopStatus.Button.Quiet"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="Perbarui"
+                        android:minHeight="40dp" />
+                </LinearLayout>
+                <TextView
+                    android:id="@+id/memorySummary"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:text="Hubungkan laptop untuk melihat penggunaan RAM."
+                    android:textColor="@color/text_main"
+                    android:textSize="12sp" />
+                <com.example.laptopstatus.SegmentedMemoryView
+                    android:id="@+id/memoryUsageBar"
+                    android:layout_width="match_parent"
+                    android:layout_height="8dp"
+                    android:layout_marginTop="8dp"
+                    android:contentDescription="Pembagian penggunaan memori" />
+                <LinearLayout
+                    android:id="@+id/memoryLegend"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal">
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:gravity="center_vertical"
+                        android:orientation="horizontal">
+                        <View android:layout_width="8dp" android:layout_height="8dp" android:background="@drawable/bg_memory_swatch" android:backgroundTint="@color/memory_apps" />
+                        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginStart="5dp" android:text="Aplikasi" android:textColor="@color/text_dim" android:textSize="10sp" />
+                    </LinearLayout>
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="0.72"
+                        android:gravity="center_vertical"
+                        android:orientation="horizontal">
+                        <View android:layout_width="8dp" android:layout_height="8dp" android:background="@drawable/bg_memory_swatch" android:backgroundTint="@color/memory_cache" />
+                        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginStart="5dp" android:text="Cache" android:textColor="@color/text_dim" android:textSize="10sp" />
+                    </LinearLayout>
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1.15"
+                        android:gravity="center_vertical"
+                        android:orientation="horizontal">
+                        <View android:layout_width="8dp" android:layout_height="8dp" android:background="@drawable/bg_memory_swatch" android:backgroundTint="@color/memory_pool" />
+                        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginStart="5dp" android:text="Pool sistem" android:textColor="@color/text_dim" android:textSize="10sp" />
+                    </LinearLayout>
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="0.9"
+                        android:gravity="center_vertical"
+                        android:orientation="horizontal">
+                        <View android:layout_width="8dp" android:layout_height="8dp" android:background="@drawable/bg_memory_swatch" android:backgroundTint="@color/memory_available" />
+                        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginStart="5dp" android:text="Tersedia" android:textColor="@color/text_dim" android:textSize="10sp" />
+                    </LinearLayout>
+                </LinearLayout>
+                <TextView
+                    android:id="@+id/memoryBreakdown"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:text="Cache sistem, commit, dan pool kernel akan ditampilkan di sini."
+                    android:textColor="@color/text_dim"
+                    android:textSize="11sp" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:id="@+id/telemetryPanel"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:background="@drawable/bg_card"
+                android:padding="16dp"
+                android:layout_marginTop="16dp">
+                <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Rincian perangkat" android:textColor="@color/text_main" android:textStyle="bold" android:textSize="16sp" />
+                <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="3dp" android:text="Spesifikasi, prosesor, setiap GPU, dan sensor yang tersedia." android:textColor="@color/text_dim" android:textSize="11sp" />
+                <TextView
+                    android:id="@+id/telemetryDetails"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:text="Data sensor akan tampil saat laptop terhubung."
+                    android:textColor="@color/text_dim"
+                    android:textSize="10sp" />
+                <LinearLayout
+                    android:id="@+id/hardwareCardsContainer"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:layout_marginTop="12dp" />
+                <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Informasi sistem" android:textColor="@color/text_main" android:textStyle="bold" android:textSize="14sp" android:layout_marginTop="14dp" />
+                <TextView
+                    android:id="@+id/systemSpecsDetails"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="3dp"
+                    android:text="Informasi sistem akan tampil saat tersambung."
+                    android:textColor="@color/text_dim"
+                    android:textSize="10sp" />
+                <LinearLayout
+                    android:id="@+id/systemSpecsContainer"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:layout_marginTop="8dp" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:id="@+id/sharePanel"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:background="@drawable/bg_card"
+                android:padding="16dp"
+                android:layout_marginTop="16dp">
+                <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Berbagi file dan clipboard" android:textColor="@color/text_main" android:textStyle="bold" android:textSize="15sp" />
+                <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="4dp" android:text="Kirim file atau teks clipboard ke laptop, atau ambil kiriman dari laptop." android:textColor="@color/text_dim" android:textSize="11sp" />
+                <FrameLayout
+                    android:id="@+id/shareDropTarget"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:minHeight="54dp"
+                    android:layout_marginTop="10dp"
+                    android:background="@drawable/bg_input"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:contentDescription="Lepaskan file di sini untuk mengirimkannya ke laptop">
+                    <TextView android:layout_width="match_parent" android:layout_height="match_parent" android:gravity="center" android:padding="12dp" android:text="Lepaskan file di sini atau gunakan tombol pilih" android:textColor="@color/text_dim" android:textSize="11sp" />
+                </FrameLayout>
+                <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:layout_marginTop="8dp">
+                    <Button android:id="@+id/shareFileButton" style="@style/Widget.LaptopStatus.Button.Quiet" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="Bagikan file" />
+                    <Button android:id="@+id/shareClipboardButton" style="@style/Widget.LaptopStatus.Button.Quiet" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:layout_marginStart="8dp" android:text="Clipboard" />
+                </LinearLayout>
+                <TextView android:id="@+id/shareStatus" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="7dp" android:text="Berbagi aktif setelah laptop tersambung." android:textColor="@color/text_dim" android:textSize="11sp" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:id="@+id/ramMapPanel"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:background="@drawable/bg_card"
+                android:padding="16dp"
+                android:layout_marginTop="16dp">
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Aksi memori"
+                    android:textColor="@color/text_main"
+                    android:textStyle="bold"
+                    android:textSize="15sp" />
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp"
+                    android:text="Aksi RAMMap untuk mengosongkan daftar memori Windows. Setiap aksi meminta konfirmasi; Windows mungkin meminta izin administrator."
+                    android:textColor="@color/text_dim"
+                    android:textSize="11sp" />
+                <Button
+                    android:id="@+id/ramActionButton"
+                    style="@style/Widget.LaptopStatus.Button.Quiet"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="10dp"
+                    android:text="Pilih aksi RAMMap" />
+                <TextView
+                    android:id="@+id/ramActionStatus"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="5dp"
+                    android:text=""
+                    android:textColor="@color/text_dim"
+                    android:textSize="11sp" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:id="@+id/processPanel"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:background="@drawable/bg_card"
+                android:padding="16dp"
+                android:layout_marginTop="16dp">
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal">
+                    <TextView
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:text="Proses Windows"
+                        android:textColor="@color/text_main"
+                        android:textStyle="bold"
+                        android:textSize="15sp" />
+                    <Button
+                        android:id="@+id/refreshProcessesButton"
+                        style="@style/Widget.LaptopStatus.Button.Quiet"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="Muat"
+                        android:minHeight="40dp" />
+                </LinearLayout>
+                <TextView
+                    android:id="@+id/processStatus"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp"
+                    android:text="Pilih Muat untuk melihat aplikasi yang berjalan."
+                    android:textColor="@color/text_dim"
+                    android:textSize="11sp" />
+                <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="10dp" android:orientation="horizontal">
+                    <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:orientation="vertical" android:padding="10dp" android:background="@drawable/bg_metric">
+                        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="CPU" android:textColor="@color/text_dim" android:textSize="10sp" />
+                        <TextView android:id="@+id/processCpuValue" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="3dp" android:text="—" android:textColor="@color/text_main" android:textStyle="bold" android:textSize="17sp" />
+                    </LinearLayout>
+                    <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:layout_marginStart="8dp" android:orientation="vertical" android:padding="10dp" android:background="@drawable/bg_metric">
+                        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="RAM" android:textColor="@color/text_dim" android:textSize="10sp" />
+                        <TextView android:id="@+id/processRamValue" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="3dp" android:text="—" android:textColor="@color/text_main" android:textStyle="bold" android:textSize="17sp" />
+                    </LinearLayout>
+                    <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:layout_marginStart="8dp" android:orientation="vertical" android:padding="10dp" android:background="@drawable/bg_metric">
+                        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="GPU" android:textColor="@color/text_dim" android:textSize="10sp" />
+                        <TextView android:id="@+id/processGpuValue" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="3dp" android:text="—" android:textColor="@color/text_main" android:textStyle="bold" android:textSize="17sp" />
+                    </LinearLayout>
+                </LinearLayout>
+                <EditText
+                    android:id="@+id/processSearchInput"
+                    android:layout_width="match_parent"
+                    android:layout_height="46dp"
+                    android:layout_marginTop="10dp"
+                    android:background="@drawable/bg_input"
+                    android:hint="Cari proses atau PID"
+                    android:inputType="text"
+                    android:paddingHorizontal="13dp"
+                    android:singleLine="true"
+                    android:textColor="@color/text_main"
+                    android:textColorHint="@color/text_dim"
+                    android:textSize="12sp" />
+                <Button
+                    android:id="@+id/toggleProcessListButton"
+                    style="@style/Widget.LaptopStatus.Button.Quiet"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="6dp"
+                    android:text="Sembunyikan semua"
+                    android:visibility="visible" />
+                <LinearLayout
+                    android:id="@+id/processList"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:layout_marginTop="8dp" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:id="@+id/troubleshootingPanel"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:background="@drawable/bg_card"
+                android:padding="16dp"
+                android:layout_marginTop="16dp">
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Log aktivitas aplikasi"
+                    android:textColor="@color/text_main"
+                    android:textStyle="bold"
+                    android:textSize="15sp" />
+                <TextView
+                    android:id="@+id/troubleshootingStatus"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="6dp"
+                    android:text="Catatan sesi berjalan otomatis. Pemeriksaan koneksi tersedia di bawah."
+                    android:textColor="@color/text_dim"
+                    android:textSize="11sp" />
+                <Button
+                    android:id="@+id/nativeTroubleshootButton"
+                    style="@style/Widget.LaptopStatus.Button.Quiet"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="10dp"
+                    android:text="Periksa koneksi laptop" />
+                <Button
+                    android:id="@+id/nativeShellButton"
+                    style="@style/Widget.LaptopStatus.Button.Quiet"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:text="Terminal Windows" />
+                <ProgressBar
+                    android:id="@+id/nativeTroubleshootingProgress"
+                    style="?android:attr/progressBarStyleHorizontal"
+                    android:layout_width="match_parent"
+                    android:layout_height="5dp"
+                    android:layout_marginTop="8dp"
+                    android:max="100"
+                    android:progress="0"
+                    android:visibility="gone" />
+                <TextView
+                    android:id="@+id/nativeTroubleshootingLog"
+                    android:layout_width="match_parent"
+                    android:layout_height="180dp"
+                    android:layout_marginTop="10dp"
+                    android:background="@drawable/bg_input"
+                    android:fontFamily="monospace"
+                    android:gravity="top|start"
+                    android:padding="10dp"
+                    android:scrollbars="vertical"
+                    android:text="Menunggu aktivitas aplikasi…"
+                    android:textColor="@color/text_dim"
+                    android:textSize="10sp" />
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:orientation="horizontal">
+                    <Button
+                        android:id="@+id/nativeCopyLogButton"
+                        style="@style/Widget.LaptopStatus.Button.Quiet"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:enabled="false"
+                        android:text="Salin log" />
+                    <Button
+                        android:id="@+id/nativeSaveLogButton"
+                        style="@style/Widget.LaptopStatus.Button.Quiet"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="8dp"
+                        android:layout_weight="1"
+                        android:enabled="false"
+                        android:text="Simpan .log" />
+                </LinearLayout>
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="6dp"
+                    android:orientation="horizontal">
+                    <Button
+                        android:id="@+id/nativeDeveloperLogButton"
+                        style="@style/Widget.LaptopStatus.Button.Quiet"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:enabled="false"
+                        android:text="Bagikan" />
+                    <Button
+                        android:id="@+id/nativePcLogButton"
+                        style="@style/Widget.LaptopStatus.Button.Quiet"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="8dp"
+                        android:layout_weight="1"
+                        android:enabled="false"
+                        android:text="Kirim ke PC" />
+                </LinearLayout>
+                <TextView
+                    android:id="@+id/nativeTroubleshootingActionStatus"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="6dp"
+                    android:accessibilityLiveRegion="polite"
+                    android:textColor="@color/text_dim"
+                    android:textSize="11sp" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:id="@+id/powerControlPanel"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:background="@drawable/bg_card"
+                android:padding="16dp"
+                android:layout_marginTop="16dp">
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Kontrol Windows"
+                    android:textColor="@color/text_main"
+                    android:textSize="15sp"
+                    android:textStyle="bold"
+                    android:layout_marginBottom="4dp" />
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="Shutdown dan restart dimulai setelah jeda 10 detik."
+                    android:textColor="@color/text_dim"
+                    android:textSize="12sp"
+                    android:layout_marginBottom="10dp" />
+                <Button
+                    android:id="@+id/remoteShutdown"
+                    style="@style/Widget.LaptopStatus.Button.Danger"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="5dp"
+                    android:text="Matikan Windows" />
+                <Button
+                    android:id="@+id/remoteRestart"
+                    style="@style/Widget.LaptopStatus.Button.Danger"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="5dp"
+                    android:text="Restart Windows" />
+                <Button
+                    android:id="@+id/remoteSleep"
+                    style="@style/Widget.LaptopStatus.Button.Quiet"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="5dp"
+                    android:text="Sleep Windows" />
+                <Button
+                    android:id="@+id/jokeButton"
+                    style="@style/Widget.LaptopStatus.Button.Quiet"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="5dp"
+                    android:text="Aktifkan Mode Joke" />
+                <TextView
+                    android:id="@+id/jokeStatus"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="Mode joke mati"
+                    android:textColor="@color/text_dim"
+                    android:textSize="12sp"
+                    android:gravity="center"
+                    android:padding="4dp" />
+            </LinearLayout>
+
+            
+
+            <TextView
+                android:id="@+id/scheduleSectionTitle"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Jadwal"
+                android:textColor="@color/text_dim"
+                android:textSize="12sp"
+                android:layout_marginTop="20dp"
+                android:layout_marginBottom="8dp" />
+
+            <LinearLayout
+                android:id="@+id/schedulePanel"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:background="@drawable/bg_card"
+                android:padding="16dp">
+                <TextView
+                    android:id="@+id/scheduleStatus"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="Belum ada jadwal daya."
+                    android:textColor="@color/text_main"
+                    android:textSize="13sp" />
+                <Button
+                    android:id="@+id/schedulePowerButton"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="10dp"
+                    android:text="Buat jadwal daya" />
+                <Button
+                    android:id="@+id/cancelScheduleButton"
+                    style="@style/Widget.LaptopStatus.Button.Quiet"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="6dp"
+                    android:text="Batalkan jadwal"
+                    android:visibility="gone" />
+            </LinearLayout>
+
+            <!-- Section title and history action -->
+            <LinearLayout
+                android:id="@+id/historySectionTitle"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:layout_marginTop="20dp"
+                android:layout_marginBottom="8dp">
+                <TextView
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="Riwayat"
+                    android:textColor="@color/text_dim"
+                    android:textSize="12sp" />
+                <Button
+                    android:id="@+id/clearHistoryButton"
+                    style="@style/Widget.LaptopStatus.Button.Quiet"
+                    android:layout_width="wrap_content"
+                    android:layout_height="36dp"
+                    android:minHeight="36dp"
+                    android:text="Hapus riwayat" />
+            </LinearLayout>
+
+            <!-- Riwayat list -->
+            <androidx.recyclerview.widget.RecyclerView
+                android:id="@+id/historyList"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:nestedScrollingEnabled="false" />
+
+            <LinearLayout
+                android:id="@+id/accountSettingsPanel"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:background="@drawable/bg_card"
+                android:padding="16dp"
+                android:layout_marginTop="16dp"
+                android:visibility="gone">
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Preferensi akun"
+                    android:textColor="@color/text_main"
+                    android:textSize="16sp"
+                    android:textStyle="bold"
+                    android:layout_marginBottom="6dp" />
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical"
+                    android:paddingVertical="10dp">
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:orientation="vertical">
+                        <TextView
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:text="Pemantauan latar belakang"
+                            android:textColor="@color/text_main"
+                            android:textSize="13sp"
+                            android:textStyle="bold" />
+                        <TextView
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:text="Tetap memantau saat aplikasi ditutup."
+                            android:textColor="@color/text_dim"
+                            android:textSize="11sp"
+                            android:layout_marginTop="2dp" />
+                    </LinearLayout>
+                    <androidx.appcompat.widget.SwitchCompat
+                        android:id="@+id/backgroundMonitorSwitch"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="12dp"
+                        android:contentDescription="Pemantauan latar belakang" />
+                </LinearLayout>
+                <View
+                    android:layout_width="match_parent"
+                    android:layout_height="1dp"
+                    android:background="@color/line" />
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical"
+                    android:paddingVertical="10dp">
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:orientation="vertical">
+                        <TextView
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:text="Mode Joke di aplikasi lain"
+                            android:textColor="@color/text_main"
+                            android:textSize="13sp"
+                            android:textStyle="bold" />
+                        <TextView
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:text="Tampilkan prank di aplikasi lain dan mulai pemantauan lagi saat HP dinyalakan. Perlu izin overlay Android."
+                            android:textColor="@color/text_dim"
+                            android:textSize="11sp"
+                            android:layout_marginTop="2dp" />
+                    </LinearLayout>
+                    <androidx.appcompat.widget.SwitchCompat
+                        android:id="@+id/androidJokeOverlaySwitch"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="12dp"
+                        android:contentDescription="Mode Joke di aplikasi lain" />
+                </LinearLayout>
+                <View
+                    android:layout_width="match_parent"
+                    android:layout_height="1dp"
+                    android:background="@color/line" />
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical"
+                    android:paddingVertical="10dp">
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:orientation="vertical">
+                        <TextView
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:text="Notifikasi baterai rendah"
+                            android:textColor="@color/text_main"
+                            android:textSize="13sp"
+                            android:textStyle="bold" />
+                        <TextView
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:text="Beri tahu saat baterai laptop di bawah 20%."
+                            android:textColor="@color/text_dim"
+                            android:textSize="11sp"
+                            android:layout_marginTop="2dp" />
+                    </LinearLayout>
+                    <androidx.appcompat.widget.SwitchCompat
+                        android:id="@+id/lowBatteryAlertsSwitch"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="12dp"
+                        android:contentDescription="Notifikasi baterai rendah" />
+                </LinearLayout>
+                <View android:layout_width="match_parent" android:layout_height="1dp" android:background="@color/line" />
+                <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:gravity="center_vertical" android:paddingVertical="10dp">
+                    <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:orientation="vertical">
+                        <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Tampilan UI terbaru" android:textColor="@color/text_main" android:textSize="13sp" android:textStyle="bold" />
+                        <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="2dp" android:text="Gunakan rancangan gerak terbaru atau matikan untuk memakai UI native sebelumnya." android:textColor="@color/text_dim" android:textSize="11sp" />
+                    </LinearLayout>
+                    <androidx.appcompat.widget.SwitchCompat android:id="@+id/motionDemoUiSwitch" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginStart="12dp" android:contentDescription="Gunakan tampilan UI terbaru" />
+                </LinearLayout>
+                <View android:layout_width="match_parent" android:layout_height="1dp" android:background="@color/line" />
+                <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:gravity="center_vertical" android:paddingVertical="10dp">
+                    <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:orientation="vertical">
+                        <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Bunyi koneksi" android:textColor="@color/text_main" android:textSize="13sp" android:textStyle="bold" />
+                        <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="2dp" android:text="Putar jingle saat laptop berhasil tersambung atau koneksi gagal." android:textColor="@color/text_dim" android:textSize="11sp" />
+                    </LinearLayout>
+                    <androidx.appcompat.widget.SwitchCompat android:id="@+id/connectionChimeSwitch" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginStart="12dp" android:contentDescription="Bunyi koneksi berhasil dan gagal" />
+                </LinearLayout>
+                <View android:layout_width="match_parent" android:layout_height="1dp" android:background="@color/line" />
+                <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:gravity="center_vertical" android:paddingVertical="10dp">
+                    <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:orientation="vertical">
+                        <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Popup daya UI terbaru di UI lama" android:textColor="@color/text_main" android:textSize="13sp" android:textStyle="bold" />
+                        <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="2dp" android:text="Tampilkan gaya popup konfirmasi terbaru saat memakai UI Android klasik." android:textColor="@color/text_dim" android:textSize="11sp" />
+                    </LinearLayout>
+                    <androidx.appcompat.widget.SwitchCompat android:id="@+id/latestPowerPopupSwitch" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginStart="12dp" android:contentDescription="Popup daya UI terbaru pada UI Android lama" />
+                </LinearLayout>
+                <View android:layout_width="match_parent" android:layout_height="1dp" android:background="@color/line" />
+                <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:gravity="center_vertical" android:paddingVertical="10dp">
+                    <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:orientation="vertical">
+                        <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Animasi" android:textColor="@color/text_main" android:textSize="13sp" android:textStyle="bold" />
+                        <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="2dp" android:text="Aktifkan atau matikan animasi aplikasi." android:textColor="@color/text_dim" android:textSize="11sp" />
+                    </LinearLayout>
+                    <androidx.appcompat.widget.SwitchCompat android:id="@+id/motionAnimationsSwitch" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginStart="12dp" android:contentDescription="Aktifkan animasi" />
+                </LinearLayout>
+                <View android:layout_width="match_parent" android:layout_height="1dp" android:background="@color/line" />
+                <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:gravity="center_vertical" android:paddingVertical="10dp">
+                    <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:orientation="vertical">
+                        <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Tema klasik Laptop Status 1.0" android:textColor="@color/text_main" android:textSize="13sp" android:textStyle="bold" />
+                        <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="2dp" android:text="Gunakan kembali tampilan klasik Laptop Status versi 1.0." android:textColor="@color/text_dim" android:textSize="11sp" />
+                    </LinearLayout>
+                    <androidx.appcompat.widget.SwitchCompat android:id="@+id/classicThemeSwitch" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginStart="12dp" android:contentDescription="Tema klasik Laptop Status versi 1.0" />
+                </LinearLayout>
+                <Button
+                    android:id="@+id/restorePreviousUiButton"
+                    style="@style/Widget.LaptopStatus.Button.Quiet"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="6dp"
+                    android:text="Kembali ke UI sebelumnya dan aktifkan animasi" />
+                <Button
+                    android:id="@+id/disconnectLaptopButton"
+                    style="@style/Widget.LaptopStatus.Button.Quiet"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:text="Putuskan dari laptop"
+                    android:textColor="#FF9AA7" />
+            </LinearLayout>
+
+            <!-- Info panel: belum terhubung -->
+            <LinearLayout
+                android:id="@+id/connectionPanel"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:background="@drawable/bg_card"
+                android:padding="16dp"
+                android:layout_marginTop="16dp">
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Info Koneksi"
+                    android:textColor="@color/text_dim"
+                    android:textSize="12sp"
+                    android:layout_marginBottom="8dp" />
+                <TextView
+                    android:id="@+id/connectionInfo"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="Mencari laptop di jaringan Wi-Fi lokal..."
+                    android:textColor="@color/text_main"
+                    android:textSize="12sp" />
+                <Button
+                    android:id="@+id/guideButton"
+                    style="@style/Widget.LaptopStatus.Button.Quiet"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:text="Panduan penggunaan" />
+                <Button
+                    android:id="@+id/tailscaleGuideButton"
+                    style="@style/Widget.LaptopStatus.Button.Quiet"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="6dp"
+                    android:text="Panduan sambungan Tailscale" />
+                <Button
+                    android:id="@+id/assistantGuideButton"
+                    style="@style/Widget.LaptopStatus.Button.Quiet"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="6dp"
+                    android:text="Panduan Assistant &amp; Gemini" />
+                <TextView
+                    android:id="@+id/discoveryTitle"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="12dp"
+                    android:text="Pilih laptop untuk dihubungkan"
+                    android:textColor="@color/text_main"
+                    android:textStyle="bold"
+                    android:textSize="13sp" />
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="3dp"
+                    android:text="Pilih satu laptop dari daftar."
+                    android:textColor="@color/text_dim"
+                    android:textSize="11sp" />
+                <TextView
+                    android:id="@+id/discoveryStatus"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="3dp"
+                    android:text="Mencari..."
+                    android:textColor="@color/text_dim"
+                    android:textSize="11sp" />
+                <FrameLayout
+                    android:id="@+id/discoveryRadar"
+                    android:layout_width="match_parent"
+                    android:layout_height="138dp"
+                    android:layout_marginTop="4dp"
+                    android:contentDescription="Animasi pencarian perangkat">
+                    <com.example.laptopstatus.DiscoveryRadarView
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent" />
+                    <ImageView
+                        android:layout_width="48dp"
+                        android:layout_height="48dp"
+                        android:layout_gravity="center"
+                        android:background="@drawable/bg_nav_selected"
+                        android:padding="13dp"
+                        android:src="@drawable/ic_laptop"
+                        android:contentDescription="Laptop" />
+                </FrameLayout>
+                <ProgressBar
+                    android:id="@+id/discoveryProgress"
+                    style="?android:attr/progressBarStyleHorizontal"
+                    android:layout_width="match_parent"
+                    android:layout_height="3dp"
+                    android:layout_marginTop="7dp"
+                    android:indeterminate="true"
+                    android:indeterminateTint="@color/accent"
+                    android:visibility="gone" />
+                <Button
+                    android:id="@+id/scanQrButton"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:text="Pindai QR laptop" />
+                <LinearLayout
+                    android:id="@+id/discoveryList"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:layout_marginTop="8dp" />
+                <Button
+                    android:id="@+id/discoverButton"
+                    style="@style/Widget.LaptopStatus.Button.Quiet"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="6dp"
+                    android:text="Pindai ulang laptop" />
+                <Button
+                    android:id="@+id/manualSetupButton"
+                    style="@style/Widget.LaptopStatus.Button.Quiet"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp"
+                    android:text="Pengaturan koneksi manual" />
+                <LinearLayout
+                    android:id="@+id/manualConnectionControls"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:visibility="gone">
+                <EditText
+                    android:id="@+id/laptopAddress"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="10dp"
+                    android:hint="IP laptop, contoh 192.168.1.10"
+                    android:background="@drawable/bg_input"
+                    android:paddingHorizontal="14dp"
+                    android:paddingVertical="12dp"
+                    android:inputType="textUri"
+                    android:singleLine="true"
+                    android:textColor="@color/text_main"
+                    android:textColorHint="@color/text_dim" />
+                <EditText
+                    android:id="@+id/pairingKey"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:hint="Kunci pairing dari aplikasi Windows"
+                    android:background="@drawable/bg_input"
+                    android:paddingHorizontal="14dp"
+                    android:paddingVertical="12dp"
+                    android:inputType="textPassword"
+                    android:singleLine="true"
+                    android:textColor="@color/text_main"
+                    android:textColorHint="@color/text_dim" />
+                <EditText
+                    android:id="@+id/screenFingerprint"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:hint="Fingerprint TLS Windows (wajib)"
+                    android:background="@drawable/bg_input"
+                    android:paddingHorizontal="14dp"
+                    android:paddingVertical="12dp"
+                    android:inputType="textCapCharacters|textNoSuggestions"
+                    android:singleLine="true"
+                    android:textColor="@color/text_main"
+                    android:textColorHint="@color/text_dim" />
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="Semua koneksi memakai TLS. Salin fingerprint dari Pengaturan aplikasi Windows."
+                    android:textColor="@color/text_dim"
+                    android:textSize="11sp"
+                    android:paddingTop="4dp" />
+                <Button
+                    android:id="@+id/connectButton"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="Simpan dan hubungkan" />
+                <LinearLayout
+                    android:id="@+id/manualConnectionProgressRow"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal"
+                    android:visibility="gone">
+                    <ProgressBar
+                        style="?android:attr/progressBarStyleSmall"
+                        android:layout_width="18dp"
+                        android:layout_height="18dp"
+                        android:indeterminateTint="@color/accent" />
+                    <TextView
+                        android:id="@+id/manualConnectionProgressText"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="8dp"
+                        android:text="Menghubungkan..."
+                        android:textColor="@color/text_dim"
+                        android:textSize="11sp" />
+                </LinearLayout>
+                </LinearLayout>
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="Tetap memantau selama Android bisa menjangkau laptop. Di jaringan berbeda, gunakan Tailscale atau Cloudflare."
+                    android:textColor="@color/text_dim"
+                    android:textSize="11sp"
+                    android:paddingTop="4dp" />
+            </LinearLayout>
+
+        </LinearLayout>
+    </ScrollView>
+
+    <!-- Bottom nav sederhana -->
+    <LinearLayout
+        android:id="@+id/bottomNavigation"
+        android:layout_width="match_parent"
+        android:layout_height="64dp"
+        android:orientation="horizontal"
+        android:background="@drawable/bg_glass_bar"
+        android:paddingHorizontal="8dp"
+        android:gravity="center_vertical">
+
+        <LinearLayout
+            android:id="@+id/navDevice"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:orientation="vertical"
+            android:gravity="center"
+            android:layout_margin="3dp"
+            android:background="@drawable/bg_nav_selected"
+            android:clickable="true"
+            android:focusable="true"
+            android:foreground="?attr/selectableItemBackground">
+            <ImageView
+                android:layout_width="18dp"
+                android:layout_height="18dp"
+                android:src="@drawable/ic_laptop" />
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Perangkat"
+                android:textColor="@color/accent"
+                android:textSize="10sp"
+                android:layout_marginTop="4dp" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/navHistory"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:orientation="vertical"
+            android:gravity="center"
+            android:clickable="true"
+            android:focusable="true"
+            android:foreground="?attr/selectableItemBackground">
+            <ImageView
+                android:layout_width="18dp"
+                android:layout_height="18dp"
+                android:src="@drawable/ic_clock" />
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Riwayat"
+                android:textColor="@color/text_dim"
+                android:textSize="10sp"
+                android:layout_marginTop="4dp" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/navDetails"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:orientation="vertical"
+            android:gravity="center"
+            android:clickable="true"
+            android:focusable="true"
+            android:foreground="?attr/selectableItemBackground">
+            <ImageView
+                android:layout_width="18dp"
+                android:layout_height="18dp"
+                android:src="@drawable/ic_details" />
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Statistik"
+                android:textColor="@color/text_dim"
+                android:textSize="8sp"
+                android:layout_marginTop="4dp" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/navDeviceDetails"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:orientation="vertical"
+            android:gravity="center"
+            android:clickable="true"
+            android:focusable="true"
+            android:foreground="?attr/selectableItemBackground">
+            <ImageView
+                android:layout_width="18dp"
+                android:layout_height="18dp"
+                android:src="@drawable/ic_hardware_details" />
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Rincian"
+                android:textColor="@color/text_dim"
+                android:textSize="8sp"
+                android:layout_marginTop="4dp" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/navSchedule"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:orientation="vertical"
+            android:gravity="center"
+            android:clickable="true"
+            android:focusable="true"
+            android:foreground="?attr/selectableItemBackground">
+            <ImageView
+                android:layout_width="18dp"
+                android:layout_height="18dp"
+                android:src="@drawable/ic_schedule" />
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Jadwal"
+                android:textColor="@color/text_dim"
+                android:textSize="9sp"
+                android:layout_marginTop="4dp" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/navAccount"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:orientation="vertical"
+            android:gravity="center"
+            android:clickable="true"
+            android:focusable="true"
+            android:foreground="?attr/selectableItemBackground">
+            <ImageView
+                android:layout_width="18dp"
+                android:layout_height="18dp"
+                android:src="@drawable/ic_account" />
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Akun"
+                android:textColor="@color/text_dim"
+                android:textSize="10sp"
+                android:layout_marginTop="4dp" />
+        </LinearLayout>
+
+    </LinearLayout>
+
+</LinearLayout>
+
+    <WebView
+        android:id="@+id/motionDemoWebView"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="#090F18"
+        android:visibility="gone" />
+
+</FrameLayout>

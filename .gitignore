@@ -1,0 +1,41 @@
+# .NET / Visual Studio
+bin/
+obj/
+.vs/
+*.user
+*.suo
+packages/
+
+# Android
+.gradle/
+build/
+.idea/
+local.properties
+*.apk
+*.aab
+*.jks
+*.keystore
+captures/
+.cxx/
+
+# Rahasia / lokal
+.env
+*.pem
+*.zip
+credentials*.json
+cert.pem
+# ---------- Khusus project LaptopStatus ----------
+.build-tools/
+hasil-build/
+_inspect_android/
+_inspect_windows/
+_pre-redesign-*/
+_redesign-reference-*/
+gaya-bahasa-saya/
+nota/
+gitignore
+
+# Tambahan
+.complaint-review*/
+*.exe
+*.bak

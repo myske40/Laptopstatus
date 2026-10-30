@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Halaman lama bergeser 28% dan meredup (parallax) saat halaman baru masuk. -->
+<set xmlns:android="http://schemas.android.com/apk/res/android" android:interpolator="@interpolator/ios_spring">
+    <translate android:fromXDelta="0" android:toXDelta="-28%" android:duration="560" />
+    <alpha android:fromAlpha="1" android:toAlpha="0.6" android:duration="560" />
+</set>

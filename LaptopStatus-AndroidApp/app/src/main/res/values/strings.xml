@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Status Perangkat</string>
+    <string name="app_publisher">PT HAHA NASIONAL</string>
+    <string name="app_function_display_description">Pantau status laptop Windows, cari proses, dan buka halaman kontrol dengan persetujuan pengguna.</string>
+    <string name="shortcut_status">Status laptop</string>
+    <string name="shortcut_status_long">Buka status laptop Windows</string>
+    <string name="shortcut_processes">Proses Windows</string>
+    <string name="shortcut_processes_long">Lihat aplikasi dan proses Windows</string>
+    <string name="shortcut_history">Riwayat laptop</string>
+    <string name="shortcut_history_long">Buka riwayat status laptop</string>
+    <string name="shortcut_joke">Mode Joke</string>
+    <string name="shortcut_joke_long">Buka dan konfirmasi Mode Joke</string>
+    <string name="shortcut_connection">Koneksi laptop</string>
+    <string name="shortcut_connection_long">Buka pengaturan koneksi laptop</string>
+</resources>

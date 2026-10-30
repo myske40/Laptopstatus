@@ -1,0 +1,439 @@
+<Window x:Class="LaptopStatus.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Status Perangkat" Height="700" Width="1060" MinHeight="480" MinWidth="760" Icon="Assets/laptop-status-logo.png"
+        Background="#0B1119"
+        FontFamily="Segoe UI">
+
+    <Window.Resources>
+        <SolidColorBrush x:Key="GlassSurfaceBrush" Color="#182230"/>
+        <SolidColorBrush x:Key="GlassPanelBrush" Color="#111923"/>
+        <SolidColorBrush x:Key="PanelBrush" Color="#111923"/>
+        <SolidColorBrush x:Key="Panel2Brush" Color="#182230"/>
+        <SolidColorBrush x:Key="LineBrush" Color="#14FFFFFF"/>
+        <SolidColorBrush x:Key="GlassLineBrush" Color="#14FFFFFF"/>
+        <SolidColorBrush x:Key="TextBrush" Color="#F1F6FC"/>
+        <SolidColorBrush x:Key="TextDimBrush" Color="#A7B5C5"/>
+        <SolidColorBrush x:Key="AccentBrush" Color="#72E4BF"/>
+        <SolidColorBrush x:Key="DangerBrush" Color="#E85D6A"/>
+
+        <!-- Ikon vector custom (path data), tanpa emoji / font-icon -->
+        <Geometry x:Key="IconLaptop">M3,4 L21,4 L21,16 L3,16 Z M8,20 L16,20 M12,16 L12,20</Geometry>
+        <Geometry x:Key="IconCpu">M6,6 L18,6 L18,18 L6,18 Z M9,2 L9,6 M15,2 L15,6 M9,18 L9,22 M15,18 L15,22 M2,9 L6,9 M2,15 L6,15 M18,9 L22,9 M18,15 L22,15</Geometry>
+        <Geometry x:Key="IconGpu">M8,3 L16,3 L16,5 L18,5 L18,7 L20,7 L20,17 L18,17 L18,19 L16,19 L16,21 L8,21 L8,19 L6,19 L6,17 L4,17 L4,7 L6,7 L6,5 L8,5 Z M9,9 L15,9 L15,15 L9,15 Z M1,9 L4,9 M1,12 L4,12 M1,15 L4,15 M20,9 L23,9 M20,12 L23,12 M20,15 L23,15 M9,1 L9,4 M12,1 L12,4 M15,1 L15,4 M9,20 L9,23 M12,20 L12,23 M15,20 L15,23</Geometry>
+        <Geometry x:Key="IconRam">M2,7 L22,7 L22,17 L2,17 Z M6,10 L6,14 M10,10 L10,14 M14,10 L14,14</Geometry>
+        <Geometry x:Key="IconBattery">M7,2 L17,2 L17,22 L7,22 Z M10,6 L14,6 L14,18 L10,18 Z</Geometry>
+        <Geometry x:Key="IconClock">M12,12 m-9,0 a9,9 0 1,0 18,0 a9,9 0 1,0 -18,0 M12,7 L12,12 L15,14</Geometry>
+        <Geometry x:Key="IconSettings">M12,12 m-3,0 a3,3 0 1,0 6,0 a3,3 0 1,0 -6,0</Geometry>
+        <Geometry x:Key="IconHistory">M12,12 m-9,0 a9,9 0 1,0 18,0 a9,9 0 1,0 -18,0 M12,7 L12,12 L15,14</Geometry>
+
+        <Style x:Key="SideItem" TargetType="Border">
+            <Setter Property="Padding" Value="14,11"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderBrush" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="3,0,0,0"/>
+        </Style>
+
+        <Style x:Key="StatCard" TargetType="Border">
+            <Setter Property="Background" Value="{DynamicResource GlassSurfaceBrush}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource GlassLineBrush}"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="CornerRadius" Value="16"/>
+            <Setter Property="Padding" Value="20,18"/>
+            <Setter Property="RenderTransformOrigin" Value="0.5,0.5"/>
+            <Setter Property="RenderTransform"><Setter.Value><ScaleTransform ScaleX="1" ScaleY="1"/></Setter.Value></Setter>
+        </Style>
+
+        <Style x:Key="GlassPanel" TargetType="Border">
+            <Setter Property="Background" Value="{DynamicResource GlassPanelBrush}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource GlassLineBrush}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="CornerRadius" Value="18"/>
+            <Setter Property="RenderTransform"><Setter.Value><TranslateTransform Y="0"/></Setter.Value></Setter>
+        </Style>
+    </Window.Resources>
+
+    <Grid>
+        <Grid.ColumnDefinitions>
+        <ColumnDefinition Width="198"/>
+        <ColumnDefinition Width="*"/>
+        </Grid.ColumnDefinitions>
+
+        <!-- SIDEBAR -->
+        <Border Grid.Column="0" Background="#0D141D" BorderBrush="{DynamicResource LineBrush}" BorderThickness="0,0,1,0">
+            <Grid x:Name="SidebarNavRoot" ClipToBounds="True">
+                <Border x:Name="NavIndicator" Height="46" Margin="10,0" VerticalAlignment="Top"
+                        Background="#2B72E4BF" BorderBrush="{StaticResource AccentBrush}"
+                        BorderThickness="3,0,0,0" CornerRadius="10" Opacity="0"
+                        IsHitTestVisible="False" RenderTransformOrigin="0.5,0.5">
+                    <Border.RenderTransform><TranslateTransform Y="0"/></Border.RenderTransform>
+                </Border>
+            <StackPanel x:Name="SidebarMenu" Margin="0,22,0,0">
+                <StackPanel Orientation="Horizontal" Margin="22,0,0,26">
+                    <Path Data="{StaticResource IconLaptop}" Stroke="{StaticResource AccentBrush}" StrokeThickness="1.8" Width="23" Height="23" Stretch="Uniform"/>
+                    <TextBlock Text="Status Perangkat" Foreground="{StaticResource TextBrush}" FontWeight="Bold" FontSize="14" Margin="10,0,0,0" VerticalAlignment="Center"/>
+                </StackPanel>
+
+                <Border x:Name="SummaryNav" Style="{StaticResource SideItem}" Cursor="Hand" MouseLeftButtonUp="NavigateToPage" Tag="summary" CornerRadius="10" Margin="10,2,10,2">
+                    <StackPanel Orientation="Horizontal">
+                        <Path Data="{StaticResource IconCpu}" Stroke="{StaticResource TextBrush}" StrokeThickness="1.6" Width="15" Height="15" Stretch="Uniform"/>
+                        <TextBlock Text="Ringkasan" Foreground="{StaticResource TextBrush}" FontSize="13" Margin="10,0,0,0"/>
+                    </StackPanel>
+                </Border>
+
+                <Border x:Name="MemoryNav" Style="{StaticResource SideItem}" Cursor="Hand" MouseLeftButtonUp="NavigateToPage" Tag="analysis" CornerRadius="10" Margin="10,2,10,2">
+                    <StackPanel Orientation="Horizontal">
+                        <Path Data="{StaticResource IconRam}" Stroke="{StaticResource TextDimBrush}" StrokeThickness="1.6" Width="15" Height="15" Stretch="Uniform"/>
+                        <TextBlock Text="Statistik" Foreground="{StaticResource TextDimBrush}" FontSize="13" Margin="10,0,0,0"/>
+                    </StackPanel>
+                </Border>
+
+                <Border x:Name="DeviceDetailsNav" Style="{StaticResource SideItem}" Cursor="Hand" MouseLeftButtonUp="NavigateToPage" Tag="device-details" CornerRadius="10" Margin="10,2,10,2">
+                    <StackPanel Orientation="Horizontal">
+                        <Path Data="{StaticResource IconGpu}" Stroke="{StaticResource TextDimBrush}" StrokeThickness="1.6" Width="15" Height="15" Stretch="Uniform"/>
+                        <TextBlock Text="Rincian perangkat" Foreground="{StaticResource TextDimBrush}" FontSize="13" Margin="10,0,0,0"/>
+                    </StackPanel>
+                </Border>
+
+                <Border x:Name="HistoryNav" Style="{StaticResource SideItem}" Cursor="Hand" MouseLeftButtonUp="NavigateToPage" Tag="history" CornerRadius="10" Margin="10,2,10,2">
+                    <StackPanel Orientation="Horizontal">
+                        <Path Data="{StaticResource IconHistory}" Stroke="{StaticResource TextDimBrush}" StrokeThickness="1.6" Width="15" Height="15" Stretch="Uniform"/>
+                        <TextBlock Text="Riwayat" Foreground="{StaticResource TextDimBrush}" FontSize="13" Margin="10,0,0,0"/>
+                    </StackPanel>
+                </Border>
+
+                <Border x:Name="SettingsNav" Style="{StaticResource SideItem}" Cursor="Hand" MouseLeftButtonUp="NavigateToPage" Tag="settings" CornerRadius="10" Margin="10,2,10,2">
+                    <StackPanel Orientation="Horizontal">
+                        <Path Data="{StaticResource IconSettings}" Stroke="{StaticResource TextDimBrush}" StrokeThickness="1.6" Width="15" Height="15" Stretch="Uniform"/>
+                        <TextBlock Text="Pengaturan" Foreground="{StaticResource TextDimBrush}" FontSize="13" Margin="10,0,0,0"/>
+                    </StackPanel>
+                </Border>
+            </StackPanel>
+            </Grid>
+        </Border>
+
+        <!-- MAIN CONTENT -->
+        <Grid x:Name="MainContent" Grid.Column="1" Margin="30" Loaded="MainContent_Loaded">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="*"/>
+            </Grid.RowDefinitions>
+
+            <!-- Header -->
+            <Grid Grid.Row="0" Margin="0,0,0,24">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <TextBlock x:Name="HeaderTitle" Text="Ringkasan Sistem" Foreground="{StaticResource TextBrush}" FontSize="22" FontWeight="ExtraBold" VerticalAlignment="Center"/>
+
+                <Border Grid.Column="1" Background="#1A72E4BF" BorderThickness="0" CornerRadius="20" Padding="12,7">
+                    <StackPanel Orientation="Horizontal">
+                        <Ellipse x:Name="StatusIndicator" Width="7" Height="7" Fill="{StaticResource AccentBrush}" VerticalAlignment="Center"/>
+                        <TextBlock x:Name="StatusText" Text="Layanan Aktif" Foreground="{StaticResource AccentBrush}" FontSize="11" FontWeight="SemiBold" Margin="6,0,0,0"/>
+                    </StackPanel>
+                </Border>
+            </Grid>
+
+            <!-- Stat cards -->
+            <Grid Grid.Row="1" Margin="0,0,0,20">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="12"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="12"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+
+                <Border Grid.Column="0" Style="{StaticResource StatCard}" MouseEnter="GlassCard_MouseEnter" MouseLeave="GlassCard_MouseLeave" Tag="cpu" Cursor="Hand" Focusable="True" ToolTip="Klik untuk membuka grafik performa CPU" AutomationProperties.Name="Penggunaan CPU. Buka grafik performa." AutomationProperties.HelpText="Tekan Enter untuk membuka grafik performa CPU." PreviewMouseLeftButtonUp="StatCard_Click" PreviewKeyDown="StatCard_KeyDown">
+                    <StackPanel>
+                        <Path Data="{StaticResource IconCpu}" Stroke="{StaticResource AccentBrush}" StrokeThickness="1.6" Width="16" Height="16" Stretch="Uniform" HorizontalAlignment="Left"/>
+                        <TextBlock x:Name="CpuValue" Text="—" Foreground="{StaticResource TextBrush}" FontSize="32" FontWeight="ExtraBold" Margin="0,12,0,2"/>
+                        <TextBlock Text="Penggunaan CPU" Foreground="{StaticResource TextDimBrush}" FontSize="12" Margin="0,0,0,0"/>
+                        <ProgressBar x:Name="CpuUsageBar" Minimum="0" Maximum="100" Value="0" Height="4" Margin="0,14,0,0"/>
+                        <TextBlock Text="Klik untuk grafik performa" Foreground="{StaticResource TextDimBrush}" FontSize="9" Margin="0,7,0,0"/>
+                    </StackPanel>
+                </Border>
+
+                <Border Grid.Column="2" Style="{StaticResource StatCard}" MouseEnter="GlassCard_MouseEnter" MouseLeave="GlassCard_MouseLeave" Tag="ram" Cursor="Hand" Focusable="True" ToolTip="Klik untuk rincian memori dan aplikasi yang memakai RAM" AutomationProperties.Name="Penggunaan RAM. Buka rincian memori dan proses." AutomationProperties.HelpText="Tekan Enter untuk membuka rincian memori dan aplikasi." PreviewMouseLeftButtonUp="StatCard_Click" PreviewKeyDown="StatCard_KeyDown">
+                    <StackPanel>
+                        <Path Data="{StaticResource IconRam}" Stroke="{StaticResource AccentBrush}" StrokeThickness="1.6" Width="16" Height="16" Stretch="Uniform" HorizontalAlignment="Left"/>
+                        <TextBlock x:Name="RamValue" Text="—" Foreground="{StaticResource TextBrush}" FontSize="32" FontWeight="ExtraBold" Margin="0,12,0,2"/>
+                        <TextBlock Text="Penggunaan RAM" Foreground="{StaticResource TextDimBrush}" FontSize="12" Margin="0,0,0,0"/>
+                        <ProgressBar x:Name="RamUsageBar" Minimum="0" Maximum="100" Value="0" Height="4" Margin="0,14,0,0"/>
+                        <TextBlock Text="Klik untuk rincian memori" Foreground="{StaticResource TextDimBrush}" FontSize="9" Margin="0,7,0,0"/>
+                    </StackPanel>
+                </Border>
+
+                <Border Grid.Column="4" Style="{StaticResource StatCard}" MouseEnter="GlassCard_MouseEnter" MouseLeave="GlassCard_MouseLeave" Tag="battery" Cursor="Hand" Focusable="True" ToolTip="Klik untuk status pengisian dan perkiraan daya" AutomationProperties.Name="Baterai. Buka status pengisian dan perkiraan daya." AutomationProperties.HelpText="Tekan Enter untuk membuka status baterai." PreviewMouseLeftButtonUp="StatCard_Click" PreviewKeyDown="StatCard_KeyDown">
+                    <StackPanel>
+                        <Path Data="{StaticResource IconBattery}" Stroke="{StaticResource AccentBrush}" StrokeThickness="1.6" Width="16" Height="16" Stretch="Uniform" HorizontalAlignment="Left"/>
+                        <TextBlock x:Name="BatteryValue" Text="—" Foreground="{StaticResource TextBrush}" FontSize="32" FontWeight="ExtraBold" Margin="0,12,0,2"/>
+                        <TextBlock Text="Baterai" Foreground="{StaticResource TextDimBrush}" FontSize="12" Margin="0,0,0,0"/>
+                        <ProgressBar x:Name="BatteryUsageBar" Minimum="0" Maximum="100" Value="0" Height="4" Margin="0,14,0,0"/>
+                        <TextBlock Text="Klik untuk status daya" Foreground="{StaticResource TextDimBrush}" FontSize="9" Margin="0,7,0,0"/>
+                    </StackPanel>
+                </Border>
+            </Grid>
+
+            <!-- Info panel -->
+            <Grid Grid.Row="2">
+            <Border x:Name="SummaryPanel" Style="{StaticResource GlassPanel}" Padding="22" VerticalAlignment="Stretch">
+                <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                <StackPanel>
+                    <TextBlock Text="Info Koneksi" Foreground="{StaticResource TextDimBrush}" FontSize="12" Margin="0,0,0,10"/>
+                    <TextBlock x:Name="ConnectionInfo" Text="Menyiapkan layanan Windows..." Foreground="{StaticResource TextBrush}" FontSize="12" TextWrapping="Wrap"/>
+                    <TextBlock Text="Alamat lokal laptop untuk pencarian Wi-Fi" Foreground="{StaticResource TextDimBrush}" FontSize="11" Margin="0,14,0,4"/>
+                    <TextBlock x:Name="AddressText" Text="Mencari alamat jaringan..." Foreground="{StaticResource TextBrush}" FontSize="13" FontWeight="SemiBold" TextWrapping="Wrap"/>
+                    <Button Content="Tampilkan QR untuk Android" Style="{StaticResource PrimaryButton}" Click="ShowPairingQr_Click" HorizontalAlignment="Left" Padding="13,7" Margin="0,12,0,0"/>
+                    <Button x:Name="CloudflareTunnelButton" Content="Sambungkan lewat Cloudflare" Style="{StaticResource PrimaryButton}" Click="ToggleCloudflareTunnel_Click" HorizontalAlignment="Left" Padding="13,7" Margin="0,8,0,0"/>
+                    <ProgressBar x:Name="CloudflareProgressBar" Height="3" Margin="0,8,0,0" Foreground="{StaticResource AccentBrush}" Background="{DynamicResource Panel2Brush}" IsIndeterminate="True" Visibility="Collapsed"/>
+                    <TextBlock x:Name="CloudflareStageText" Text="" Foreground="{StaticResource AccentBrush}" FontSize="11" FontWeight="SemiBold" Margin="0,5,0,0" Visibility="Collapsed"/>
+                    <TextBlock x:Name="CloudflareTunnelStatusText" Text="Tunnel mati. Nyalakan agar Android dapat menjangkau laptop dari jaringan lain." Foreground="{StaticResource TextDimBrush}" FontSize="11" TextWrapping="Wrap" Margin="0,6,0,0"/>
+                    <TextBlock Text="Kunci pairing Android" Foreground="{StaticResource TextDimBrush}" FontSize="11" Margin="0,12,0,4"/>
+                    <TextBlock x:Name="PairingKeyText" Text="..." Foreground="{StaticResource AccentBrush}" FontSize="14" FontWeight="Bold"/>
+                    <Border x:Name="WindowsSharePanel" Background="{DynamicResource Panel2Brush}" BorderBrush="{DynamicResource GlassLineBrush}" BorderThickness="1" CornerRadius="14" Padding="16" Margin="0,12,0,0">
+                        <StackPanel>
+                            <TextBlock Text="Berbagi file dan clipboard" Foreground="{StaticResource TextBrush}" FontSize="15" FontWeight="SemiBold"/>
+                            <TextBlock Text="Lepaskan file di sini untuk mengirimkannya ke Android. Berbagi hanya aktif untuk perangkat yang sudah dipasangkan." Foreground="{StaticResource TextDimBrush}" FontSize="11" TextWrapping="Wrap" Margin="0,5,0,10"/>
+                            <Border x:Name="ShareDropZone" AllowDrop="True" DragEnter="ShareDropZone_DragEnter" DragOver="ShareDropZone_DragOver" DragLeave="ShareDropZone_DragLeave" Drop="ShareDropZone_Drop" Background="#202E3C" BorderBrush="#3D72E4BF" BorderThickness="1" CornerRadius="10" Padding="15" MinHeight="56">
+                                <TextBlock x:Name="ShareDropHint" Text="Jatuhkan file untuk membagikannya" Foreground="{StaticResource TextDimBrush}" FontSize="12" TextAlignment="Center" VerticalAlignment="Center"/>
+                            </Border>
+                            <StackPanel Orientation="Horizontal" Margin="0,9,0,0">
+                                <Button Content="Pilih file" Click="ChooseShareFile_Click" Style="{StaticResource PrimaryButton}" Padding="12,6"/>
+                                <Button Content="Bagikan clipboard" Click="ShareClipboard_Click" Margin="8,0,0,0" Padding="12,6"/>
+                                <Button Content="Buka file diterima" Click="OpenSharedFilesFolder_Click" Margin="8,0,0,0" Padding="12,6"/>
+                            </StackPanel>
+                            <TextBlock x:Name="ShareStatusText" Text="Pilih file atau letakkan file di area di atas." Foreground="{StaticResource TextDimBrush}" FontSize="11" TextWrapping="Wrap" Margin="0,8,0,0"/>
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
+                </ScrollViewer>
+            </Border>
+
+            <Border x:Name="DeviceDetailsPanel" Style="{StaticResource GlassPanel}" Padding="22" VerticalAlignment="Stretch" Visibility="Collapsed">
+                <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                    <StackPanel>
+                        <Grid Margin="0,0,0,16">
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                            <StackPanel>
+                                <TextBlock Text="Rincian perangkat" Foreground="{StaticResource TextBrush}" FontSize="18" FontWeight="SemiBold"/>
+                                <TextBlock Text="Spesifikasi, prosesor, dan setiap kartu grafis yang terdeteksi" Foreground="{StaticResource TextDimBrush}" FontSize="11" Margin="0,4,0,0"/>
+                            </StackPanel>
+                            <Border Grid.Column="1" Background="#142D2C" CornerRadius="12" Padding="10,5" VerticalAlignment="Center">
+                                <TextBlock Text="HARDWARE" Foreground="{StaticResource AccentBrush}" FontSize="9" FontWeight="Bold"/>
+                            </Border>
+                        </Grid>
+                        <WrapPanel x:Name="DeviceHardwareCards"/>
+                        <WrapPanel x:Name="DeviceSystemSpecs" Margin="0,14,0,0"/>
+                    </StackPanel>
+                </ScrollViewer>
+            </Border>
+
+            <Border x:Name="HistoryPanel" Style="{StaticResource GlassPanel}" Padding="22" VerticalAlignment="Top" Visibility="Collapsed">
+                <StackPanel>
+                    <DockPanel LastChildFill="False" Margin="0,0,0,8">
+                        <Button DockPanel.Dock="Right" Content="Hapus riwayat" Click="ClearWindowsHistory_Click" Style="{StaticResource PrimaryButton}" Padding="10,5" FontSize="11"/>
+                        <TextBlock Text="Riwayat Perangkat" Foreground="{StaticResource TextBrush}" FontSize="15" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                    </DockPanel>
+                    <ScrollViewer MaxHeight="480" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                        <TextBlock x:Name="WindowsHistoryText" Text="Aplikasi Windows siap menerima koneksi dari Android." Foreground="{StaticResource TextDimBrush}" FontSize="12" TextWrapping="Wrap"/>
+                    </ScrollViewer>
+                </StackPanel>
+            </Border>
+
+            <Border x:Name="SettingsPanel" Style="{StaticResource GlassPanel}" Padding="22" VerticalAlignment="Stretch" MinHeight="260" Visibility="Collapsed">
+                <ScrollViewer x:Name="SettingsScroll" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" CanContentScroll="False">
+                <StackPanel>
+                    <TextBlock Text="Pengaturan Koneksi" Foreground="{StaticResource TextBrush}" FontSize="15" FontWeight="SemiBold" Margin="0,0,0,10"/>
+                    <Button Content="Buka panduan penggunaan" Click="OpenGuide_Click" HorizontalAlignment="Left" Margin="0,0,0,12"/>
+                    <TextBlock Text="Di Wi-Fi yang sama, Android menemukan laptop otomatis. Untuk jaringan berbeda, pasang Tailscale di kedua perangkat dan pindai QR, atau pakai Cloudflare di bawah." Foreground="{StaticResource TextDimBrush}" FontSize="12" TextWrapping="Wrap" Margin="0,0,0,12"/>
+                    <TextBlock Text="Tampilan" Foreground="{StaticResource TextBrush}" FontSize="12" FontWeight="SemiBold" Margin="0,4,0,6"/>
+                    <CheckBox x:Name="MotionAnimationsToggle" Content="Aktifkan animasi" Checked="AppAppearanceToggle_Changed" Unchecked="AppAppearanceToggle_Changed" Margin="0,0,0,6"/>
+                    <CheckBox x:Name="ClassicThemeToggle" Content="Tema klasik Laptop Status 1.0" Checked="AppAppearanceToggle_Changed" Unchecked="AppAppearanceToggle_Changed" Margin="0,0,0,12"/>
+                    <Border Background="{DynamicResource Panel2Brush}" BorderBrush="{DynamicResource GlassLineBrush}" BorderThickness="1" CornerRadius="12" Padding="12" Margin="0,0,0,14">
+                        <StackPanel>
+                            <TextBlock Text="Kustomisasi Mode Joke" Foreground="{StaticResource TextBrush}" FontSize="12" FontWeight="SemiBold"/>
+                            <TextBlock Text="Atur joke layar penuh Android di sini. Android harus terhubung dan toggle joke Android aktif; simulasi menutup otomatis setelah 30 detik." Foreground="{StaticResource TextDimBrush}" FontSize="10" TextWrapping="Wrap" Margin="0,4,0,10"/>
+                            <TextBlock Text="Pesan khusus" Foreground="{StaticResource TextDimBrush}" FontSize="11"/>
+                            <TextBox x:Name="JokeMessageBox" MaxLength="200" TextWrapping="Wrap" AcceptsReturn="True" MinHeight="54" Padding="9,7" Margin="0,4,0,8"/>
+                            <TextBlock Text="Warna latar (#RRGGBB)" Foreground="{StaticResource TextDimBrush}" FontSize="11"/>
+                            <Grid Margin="0,4,0,8">
+                                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="38"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                <TextBox x:Name="JokeBackgroundHexBox" TextChanged="JokeBackgroundHexBox_TextChanged" Padding="9,7"/>
+                                <Border x:Name="JokeBackgroundPreview" Grid.Column="1" Margin="7,2" CornerRadius="6" BorderBrush="{StaticResource GlassLineBrush}" BorderThickness="1"/>
+                                <Button Grid.Column="2" Content="Pilih warna" Click="ChooseJokeBackground_Click" Padding="10,6" Margin="4,0,0,0"/>
+                            </Grid>
+                            <TextBlock Text="Simbol ikon (emoji atau teks pendek)" Foreground="{StaticResource TextDimBrush}" FontSize="11"/>
+                            <TextBox x:Name="JokeIconGlyphBox" MaxLength="8" Padding="9,7" Margin="0,4,0,8"/>
+                            <TextBlock Text="Atau pakai gambar ikon" Foreground="{StaticResource TextDimBrush}" FontSize="11"/>
+                            <DockPanel Margin="0,4,0,8" LastChildFill="True">
+                                <Button DockPanel.Dock="Right" Content="Pilih gambar…" Click="ChooseJokeIcon_Click" Padding="10,6" Margin="6,0,0,0"/>
+                                <Button DockPanel.Dock="Right" Content="Hapus" Click="ClearJokeIcon_Click" Padding="10,6"/>
+                                <TextBlock x:Name="JokeIconPathText" Text="Ikon bawaan" Foreground="{StaticResource TextDimBrush}" FontSize="10" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+                            </DockPanel>
+                            <TextBlock Text="Animasi (pilih satu dari 10 efek)" Foreground="{StaticResource TextDimBrush}" FontSize="11"/>
+                            <ComboBox x:Name="JokeAnimationCombo" SelectedValuePath="Tag" Padding="7" Margin="0,4,0,10">
+                                <ComboBoxItem Content="1 · Denyut" Tag="pulse"/>
+                                <ComboBoxItem Content="2 · Putar" Tag="spin"/>
+                                <ComboBoxItem Content="3 · Memantul" Tag="bounce"/>
+                                <ComboBoxItem Content="4 · Getar" Tag="shake"/>
+                                <ComboBoxItem Content="5 · Ayun" Tag="swing"/>
+                                <ComboBoxItem Content="6 · Zoom" Tag="zoom"/>
+                                <ComboBoxItem Content="7 · Pudar" Tag="fade"/>
+                                <ComboBoxItem Content="8 · Geser" Tag="slide"/>
+                                <ComboBoxItem Content="9 · Goyang" Tag="wobble"/>
+                                <ComboBoxItem Content="10 · Pop" Tag="pop"/>
+                            </ComboBox>
+                            <Button x:Name="SaveJokeSettingsButton" Content="Simpan kustomisasi joke" Style="{StaticResource PrimaryButton}" Click="SaveJokeSettings_Click" HorizontalAlignment="Left" Padding="13,7"/>
+                            <Button Content="Tampilkan joke di Android (30 detik)" Style="{StaticResource PrimaryButton}" Click="TriggerAndroidJoke_Click" HorizontalAlignment="Left" Padding="13,7" Margin="0,8,0,0"/>
+                            <Button Content="Hentikan joke Android" Click="StopAndroidJoke_Click" HorizontalAlignment="Left" Padding="13,7" Margin="0,5,0,0"/>
+                            <TextBlock x:Name="JokeSettingsStatusText" Text="Pengaturan joke tersimpan di laptop ini." Foreground="{StaticResource TextDimBrush}" FontSize="10" TextWrapping="Wrap" Margin="0,6,0,0"/>
+                        </StackPanel>
+                    </Border>
+                    <TextBlock Text="Koneksi &amp; pemberitahuan" Foreground="{StaticResource TextBrush}" FontSize="12" FontWeight="SemiBold" Margin="0,0,0,6"/>
+                    <CheckBox x:Name="AutomaticDualRouteToggle" Content="Coba LAN dan Tailscale otomatis" Checked="ConnectionPreferencesToggle_Changed" Unchecked="ConnectionPreferencesToggle_Changed" Margin="0,0,0,3"/>
+                    <TextBlock Text="Android mencoba LAN dan Tailscale dari QR. Jika hanya satu perangkat memakai Tailscale, koneksi hanya dapat beralih ke LAN saat keduanya ada di Wi-Fi yang sama." Foreground="{StaticResource TextDimBrush}" FontSize="10" TextWrapping="Wrap" Margin="0,0,0,8"/>
+                    <CheckBox x:Name="ConnectionChimeToggle" Content="Bunyikan dan beri notifikasi saat koneksi berhasil atau ditolak" Checked="ConnectionPreferencesToggle_Changed" Unchecked="ConnectionPreferencesToggle_Changed" Margin="0,0,0,3"/>
+                    <TextBlock Text="Nada gagal berbunyi ketika permintaan sampai ke Windows lalu ditolak." Foreground="{StaticResource TextDimBrush}" FontSize="10" TextWrapping="Wrap" Margin="0,0,0,12"/>
+                    <CheckBox x:Name="AndroidJokeNotificationToggle" Content="Joke dan suara notifikasi di Android saat aplikasi dibuka" Checked="ConnectionPreferencesToggle_Changed" Unchecked="ConnectionPreferencesToggle_Changed" Margin="0,0,0,3"/>
+                    <TextBlock Text="Notifikasi memakai suara berprioritas tinggi di Android. Volume tetap mengikuti pengaturan Android." Foreground="{StaticResource TextDimBrush}" FontSize="10" TextWrapping="Wrap" Margin="0,0,0,12"/>
+                    <TextBlock Text="Cloudflare Tunnel" Foreground="{StaticResource TextBrush}" FontSize="12" FontWeight="SemiBold" Margin="0,2,0,4"/>
+                    <TextBlock Text="Arahkan tunnel ke http://127.0.0.1:8768, lalu isi hostname dan token. Token disimpan terenkripsi dan alamat tunnel otomatis masuk ke QR." Foreground="{StaticResource TextDimBrush}" FontSize="11" TextWrapping="Wrap" Margin="0,0,0,8"/>
+                    <TextBlock Text="Hostname publik, contoh https://laptop.domainanda.com" Foreground="{StaticResource TextDimBrush}" FontSize="11"/>
+                    <TextBox x:Name="CloudflareHostnameBox" Padding="9,7" Margin="0,4,0,8"/>
+                    <Button x:Name="SetupCloudflareAccountButton" Content="Login Cloudflare &amp; buat tunnel otomatis" Style="{StaticResource PrimaryButton}" Click="SetupCloudflareAccount_Click" HorizontalAlignment="Left" Padding="13,7" Margin="0,0,0,6"/>
+                    <Button x:Name="LoginOtherCloudflareButton" Content="Pilih akun Cloudflare lain" Tag="ForceLogin" Style="{StaticResource PrimaryButton}" Click="SetupCloudflareAccount_Click" HorizontalAlignment="Left" Padding="13,7" Margin="0,0,0,6" ToolTip="Login lewat browser untuk memilih akun Cloudflare yang memiliki domain."/>
+                    <TextBlock x:Name="CloudflareAccountStatusText" Text="Memeriksa login Cloudflare..." Foreground="{StaticResource TextDimBrush}" FontSize="11" TextWrapping="Wrap" Margin="0,0,0,10"/>
+                    <TextBlock Text="Atau isi token secara manual di bawah." Foreground="{StaticResource TextDimBrush}" FontSize="10" TextWrapping="Wrap" Margin="0,0,0,8"/>
+                    <TextBlock Text="Token tunnel dari Cloudflare (hanya dimasukkan sekali)" Foreground="{StaticResource TextDimBrush}" FontSize="11"/>
+                    <PasswordBox x:Name="CloudflareTokenBox" MaxLength="4096" Padding="9,7" Margin="0,4,0,8"/>
+                    <Button x:Name="SaveCloudflareTunnelButton" Content="Simpan dan sambungkan otomatis" Style="{StaticResource PrimaryButton}" Click="SaveCloudflareTunnel_Click" HorizontalAlignment="Left" Padding="13,7" Margin="0,0,0,6"/>
+                    <TextBlock Text="Jangan bagikan token tunnel." Foreground="{StaticResource TextDimBrush}" FontSize="10" TextWrapping="Wrap" Margin="0,0,0,12"/>
+                    <TextBlock Text="Akses layar dengan password LaptopStatus" Foreground="{StaticResource TextBrush}" FontSize="12" FontWeight="SemiBold" Margin="0,4,0,4"/>
+                    <TextBlock Text="Opsional. Sesi maksimal 10 menit dan selalu bisa dihentikan dari laptop. Password Windows tidak dipakai." Foreground="{StaticResource TextDimBrush}" FontSize="11" TextWrapping="Wrap" Margin="0,0,0,8"/>
+                    <CheckBox x:Name="UnattendedAccessToggle" Content="Izinkan sesi password tanpa popup" Foreground="{StaticResource TextBrush}" FontSize="12" Margin="0,3,0,8"/>
+                    <TextBlock Text="Buat atau ganti password khusus (minimal 3 karakter)" Foreground="{StaticResource TextDimBrush}" FontSize="11"/>
+                    <PasswordBox x:Name="ScreenAccessPasswordBox" MaxLength="128" Padding="9,7" Margin="0,5,0,8"/>
+                    <Button x:Name="SaveScreenAccessButton" Content="Simpan pengaturan akses" Style="{StaticResource PrimaryButton}" Click="SaveScreenAccess_Click" HorizontalAlignment="Left" Padding="13,7" Margin="0,0,0,5"/>
+                    <TextBlock x:Name="ScreenAccessStatus" Text="Akses dengan password mati" Foreground="{StaticResource TextDimBrush}" FontSize="11" TextWrapping="Wrap" Margin="0,0,0,14"/>
+                    <TextBlock Text="Alamat IP laptop" Foreground="{StaticResource TextDimBrush}" FontSize="11"/>
+                    <TextBlock Text="{Binding ElementName=AddressText, Path=Text}" Foreground="{StaticResource TextBrush}" FontSize="13" FontWeight="SemiBold" Margin="0,3,0,12"/>
+                    <TextBlock Text="Kunci pairing manual untuk versi lama" Foreground="{StaticResource TextDimBrush}" FontSize="11"/>
+                    <TextBlock Text="{Binding ElementName=PairingKeyText, Path=Text}" Foreground="{StaticResource AccentBrush}" FontSize="14" FontWeight="Bold" Margin="0,3,0,0"/>
+                    <TextBlock Text="Fingerprint TLS untuk koneksi manual atau pemulihan" Foreground="{StaticResource TextDimBrush}" FontSize="11" Margin="0,14,0,0"/>
+                    <TextBlock x:Name="CertificateFingerprintText" Text="Menyiapkan sertifikat..." Foreground="{StaticResource AccentBrush}" FontSize="11" FontWeight="SemiBold" TextWrapping="Wrap" Margin="0,3,0,0"/>
+                    <TextBlock Text="Password akses tersimpan untuk akun Windows ini" Foreground="{StaticResource TextDimBrush}" FontSize="11" Margin="0,14,0,4"/>
+                    <Button x:Name="ToggleSavedScreenPasswordButton" Content="Tampilkan password" Click="ToggleSavedScreenPassword_Click" HorizontalAlignment="Left" Visibility="Collapsed" Padding="11,6"/>
+                    <TextBox x:Name="SavedScreenAccessPasswordText" IsReadOnly="True" TextWrapping="Wrap" Visibility="Collapsed" Margin="0,6,0,0" FontFamily="Consolas"/>
+                    <TextBlock Text="Disimpan terenkripsi (DPAPI) dan hanya bisa dibuka dari akun Windows ini." Foreground="{StaticResource TextDimBrush}" FontSize="10" TextWrapping="Wrap" Margin="0,4,0,0"/>
+                    <TextBlock Text="Port layar aman: 8767" Foreground="{StaticResource TextDimBrush}" FontSize="11" Margin="0,5,0,0"/>
+                </StackPanel>
+                </ScrollViewer>
+            </Border>
+
+            <Border x:Name="MemoryPanel" Style="{StaticResource GlassPanel}" Padding="22" VerticalAlignment="Stretch" Visibility="Collapsed">
+                <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                    <StackPanel>
+                        <Grid Margin="0,0,0,14">
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                            <StackPanel>
+                                <TextBlock Text="Statistik &amp; Troubleshooting" Foreground="{StaticResource TextBrush}" FontSize="18" FontWeight="SemiBold"/>
+                                <TextBlock Text="Statistik sistem dan proses yang dilaporkan laptop." Foreground="{StaticResource TextDimBrush}" FontSize="11" Margin="0,4,0,0"/>
+                            </StackPanel>
+                            <Button Grid.Column="1" Content="Perbarui" Click="RefreshProcessList_Click" Padding="14,7" VerticalAlignment="Center"/>
+                        </Grid>
+                        <Border Background="{DynamicResource Panel2Brush}" BorderBrush="{DynamicResource GlassLineBrush}" BorderThickness="1" CornerRadius="12" Padding="4" Margin="0,0,0,14">
+                            <StackPanel Orientation="Horizontal">
+                                <Button x:Name="MemoryProcessesTab" Content="Proses" Click="ShowProcessView_Click" Padding="18,8" MinWidth="92" Background="#263B4A" BorderBrush="#3D72E4BF"/>
+                                <Button x:Name="MemoryPerformanceTab" Content="Performa" Click="ShowPerformanceView_Click" Padding="18,8" MinWidth="100" Margin="4,0,0,0" Background="Transparent" BorderBrush="Transparent" Foreground="{StaticResource TextDimBrush}"/>
+                            </StackPanel>
+                        </Border>
+                        <Border x:Name="ProcessView" Visibility="Visible" Opacity="1">
+                            <StackPanel>
+                                <Border Background="{DynamicResource Panel2Brush}" BorderBrush="{DynamicResource GlassLineBrush}" BorderThickness="1" CornerRadius="14" Padding="16" Margin="0,0,0,14">
+                                    <StackPanel>
+                                        <Grid>
+                                            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                            <TextBlock Text="Penggunaan memori" Foreground="{StaticResource TextBrush}" FontSize="14" FontWeight="SemiBold"/>
+                                            <TextBlock Grid.Column="1" Text="RAM FISIK" Foreground="{StaticResource TextDimBrush}" FontSize="9" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                                        </Grid>
+                                        <TextBlock x:Name="MemorySummaryText" Text="Memuat data memori..." Foreground="{StaticResource TextBrush}" FontSize="12" TextWrapping="Wrap" Margin="0,8,0,0"/>
+                                        <ProgressBar x:Name="MemoryUsageBar" Height="8" Minimum="0" Maximum="100" Margin="0,10,0,8"/>
+                                        <TextBlock x:Name="MemoryBreakdownText" Text="Cache dan pool sistem adalah perkiraan dari Windows." Foreground="{StaticResource TextDimBrush}" FontSize="10" TextWrapping="Wrap"/>
+                                    </StackPanel>
+                                </Border>
+                                <Border Background="{DynamicResource Panel2Brush}" BorderBrush="{DynamicResource GlassLineBrush}" BorderThickness="1" CornerRadius="14" Padding="14" Margin="0,0,0,14">
+                                    <StackPanel>
+                                        <TextBlock Text="Aksi RAMMap" Foreground="{StaticResource TextBrush}" FontSize="14" FontWeight="SemiBold"/>
+                                        <TextBlock Text="Bersihkan daftar memori tertentu. Windows dapat meminta izin administrator; aplikasi mungkin memuat ulang data." Foreground="{StaticResource TextDimBrush}" FontSize="10" TextWrapping="Wrap" Margin="0,5,0,10"/>
+                                        <Grid>
+                                            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                            <ComboBox x:Name="RamMapActionSelector" SelectedIndex="0" MinHeight="38" VerticalContentAlignment="Center">
+                                                <ComboBoxItem Content="Kosongkan working sets" Tag="working-sets"/>
+                                                <ComboBoxItem Content="Kosongkan system working set" Tag="system-working-set"/>
+                                                <ComboBoxItem Content="Kosongkan modified page list" Tag="modified-page-list"/>
+                                                <ComboBoxItem Content="Kosongkan standby list" Tag="standby-list"/>
+                                                <ComboBoxItem Content="Kosongkan standby priority 0" Tag="priority0-standby-list"/>
+                                            </ComboBox>
+                                            <Button x:Name="RunRamMapActionButton" Grid.Column="1" Content="Jalankan" Click="RunRamMapAction_Click" Margin="8,0,0,0" Padding="14,7"/>
+                                        </Grid>
+                                        <TextBlock x:Name="RamMapActionStatus" Text="" Foreground="{StaticResource TextDimBrush}" FontSize="10" TextWrapping="Wrap" Margin="0,7,0,0"/>
+                                    </StackPanel>
+                                </Border>
+                                <Grid Margin="0,0,0,8">
+                                    <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="280"/></Grid.ColumnDefinitions>
+                                    <StackPanel VerticalAlignment="Center">
+                                        <TextBlock Text="Proses berjalan" Foreground="{StaticResource TextBrush}" FontSize="14" FontWeight="SemiBold"/>
+                                        <TextBlock Text="Hentikan hanya aplikasi yang Anda kenali. Proses inti Windows dilindungi." Foreground="{StaticResource TextDimBrush}" FontSize="10" TextWrapping="Wrap" Margin="0,3,12,0"/>
+                                    </StackPanel>
+                                    <TextBox x:Name="ProcessSearchBox" Grid.Column="1" Height="36" Padding="10,7" VerticalContentAlignment="Center" ToolTip="Cari nama aplikasi atau PID" TextChanged="ProcessSearchBox_TextChanged"/>
+                                </Grid>
+                                <DataGrid x:Name="ProcessTable" AutoGenerateColumns="False" CanUserAddRows="False" CanUserDeleteRows="False" IsReadOnly="True" HeadersVisibility="Column" MinHeight="220" MaxHeight="430" Foreground="#F3F6FB" BorderThickness="1" BorderBrush="{DynamicResource GlassLineBrush}" Background="{DynamicResource PanelBrush}" GridLinesVisibility="None" SelectionMode="Single" SelectionUnit="FullRow" RowHeight="40" CanUserSortColumns="True">
+                                    <DataGrid.Columns>
+                                        <DataGridTextColumn Header="Aplikasi" Binding="{Binding Name}" Width="*"/>
+                                        <DataGridTextColumn Header="PID" Binding="{Binding Pid}" Width="75"/>
+                                        <DataGridTextColumn Header="RAM" Binding="{Binding MemoryText}" Width="100"/>
+                                        <DataGridTemplateColumn Header="Aksi" Width="105">
+                                            <DataGridTemplateColumn.CellTemplate><DataTemplate><Button Content="Hentikan" Style="{StaticResource DangerButton}" Tag="{Binding Pid}" IsEnabled="{Binding CanTerminate}" Click="KillProcess_Click" Padding="9,5" MinHeight="30" FontSize="11"/></DataTemplate></DataGridTemplateColumn.CellTemplate>
+                                        </DataGridTemplateColumn>
+                                    </DataGrid.Columns>
+                                </DataGrid>
+                            </StackPanel>
+                        </Border>
+                        <Border x:Name="PerformanceView" Visibility="Collapsed" Opacity="0">
+                            <StackPanel>
+                                <TextBlock Text="Performa langsung" Foreground="{StaticResource TextBrush}" FontSize="14" FontWeight="SemiBold"/>
+                                <TextBlock Text="Riwayat lokal dari pembacaan laptop ini. Nilai sensor yang tidak tersedia tetap ditandai dengan —." Foreground="{StaticResource TextDimBrush}" FontSize="10" TextWrapping="Wrap" Margin="0,4,0,14"/>
+                                <Grid>
+                                    <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="12"/><ColumnDefinition Width="*"/><ColumnDefinition Width="12"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                    <Border Grid.Column="0" Background="{DynamicResource Panel2Brush}" BorderBrush="{DynamicResource GlassLineBrush}" BorderThickness="1" CornerRadius="14" Padding="14">
+                                        <StackPanel><TextBlock Text="CPU" Foreground="{StaticResource TextDimBrush}" FontSize="11"/><TextBlock x:Name="PerformanceCpuValue" Text="—" Foreground="{StaticResource TextBrush}" FontSize="25" FontWeight="SemiBold" Margin="0,6,0,8"/><Canvas x:Name="CpuHistoryCanvas" Height="96" ClipToBounds="True" SizeChanged="PerformanceCanvas_SizeChanged"/></StackPanel>
+                                    </Border>
+                                    <Border Grid.Column="2" Background="{DynamicResource Panel2Brush}" BorderBrush="{DynamicResource GlassLineBrush}" BorderThickness="1" CornerRadius="14" Padding="14">
+                                        <StackPanel><TextBlock Text="RAM" Foreground="{StaticResource TextDimBrush}" FontSize="11"/><TextBlock x:Name="PerformanceRamValue" Text="—" Foreground="{StaticResource TextBrush}" FontSize="25" FontWeight="SemiBold" Margin="0,6,0,8"/><Canvas x:Name="RamHistoryCanvas" Height="96" ClipToBounds="True" SizeChanged="PerformanceCanvas_SizeChanged"/></StackPanel>
+                                    </Border>
+                                    <Border Grid.Column="4" Background="{DynamicResource Panel2Brush}" BorderBrush="{DynamicResource GlassLineBrush}" BorderThickness="1" CornerRadius="14" Padding="14">
+                                        <StackPanel><TextBlock Text="GPU" Foreground="{StaticResource TextDimBrush}" FontSize="11"/><TextBlock x:Name="PerformanceGpuValue" Text="—" Foreground="{StaticResource TextBrush}" FontSize="25" FontWeight="SemiBold" Margin="0,6,0,8"/><Canvas x:Name="GpuHistoryCanvas" Height="96" ClipToBounds="True" SizeChanged="PerformanceCanvas_SizeChanged"/></StackPanel>
+                                    </Border>
+                                </Grid>
+                                <Border Background="{DynamicResource Panel2Brush}" BorderBrush="{DynamicResource GlassLineBrush}" BorderThickness="1" CornerRadius="14" Padding="15" Margin="0,14,0,0">
+                                    <StackPanel><TextBlock Text="Sensor perangkat" Foreground="{StaticResource TextBrush}" FontSize="13" FontWeight="SemiBold"/><TextBlock x:Name="PerformanceSensorText" Text="Suhu CPU, suhu GPU, dan kipas sedang dibaca." Foreground="{StaticResource TextDimBrush}" FontSize="11" TextWrapping="Wrap" Margin="0,6,0,0"/></StackPanel>
+                                </Border>
+                            </StackPanel>
+                        </Border>
+                        <Border Background="{DynamicResource Panel2Brush}" BorderBrush="{DynamicResource GlassLineBrush}" BorderThickness="1" CornerRadius="14" Padding="16" Margin="0,14,0,0">
+                            <StackPanel>
+                                <TextBlock Text="Troubleshooting" Foreground="{StaticResource TextBrush}" FontSize="14" FontWeight="SemiBold"/>
+                                <TextBlock x:Name="TroubleshootingStatusText" Text="Status perangkat akan diperiksa saat layanan berjalan." Foreground="{StaticResource TextDimBrush}" FontSize="11" TextWrapping="Wrap" Margin="0,5,0,0"/>
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+                </ScrollViewer>
+            </Border>
+            </Grid>
+
+        </Grid>
+    </Grid>
+</Window>
