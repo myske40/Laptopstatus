@@ -92,8 +92,7 @@ LaptopStatus-Setup/        Proyek installer Windows
 - Jangan pernah memasukkan keystore, sertifikat `.pfx`, atau token ke repositori.
 
 ### Lisensi
-
-Belum ditentukan. Tambahkan berkas `LICENSE` jika ingin menentukan lisensi.
+nanti yaa
 
 ---
 
@@ -188,4 +187,5 @@ LaptopStatus-Setup/        Windows installer project
 
 ### License
 
-Not specified yet. Add a `LICENSE` file if you want to set one.
+soon
+
