@@ -2926,7 +2926,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun maybePostAndroidJokeNotification(data: JSONObject) {
-        val active = data.optBoolean("jokeActive", false)
+        val active = data.optBoolean("androidJokeTriggerActive", false)
         val enabled = data.optBoolean("androidJokeNotificationEnabled", false)
         androidJokeActiveOnWindows = active
         if (!active || !enabled) {
@@ -3511,7 +3511,12 @@ class MainActivity : AppCompatActivity() {
         root.addView(keyboardPanel, LinearLayout.LayoutParams(-1, -2).apply { topMargin = px(5) })
         refreshKeyboardTabs()
 
-        val dialog = AlertDialog.Builder(this).setView(root).create()
+        val dialogContent = android.widget.ScrollView(this).apply {
+            isFillViewport = true
+            clipToPadding = false
+            addView(root, android.view.ViewGroup.LayoutParams(-1, -2))
+        }
+        val dialog = AlertDialog.Builder(this).setView(dialogContent).create()
         nativeShellDialog = dialog
         nativeShellOutput = output
         nativeShellInput = input
@@ -3548,6 +3553,7 @@ class MainActivity : AppCompatActivity() {
             if (remoteShellSessionId.isNotBlank()) stopRemoteShell()
         }
         dialog.show()
+        dialogContent.post { dialogContent.fullScroll(View.FOCUS_DOWN) }
         dialog.window?.apply {
             setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
             setLayout(WindowManager.LayoutParams.MATCH_PARENT, WindowManager.LayoutParams.MATCH_PARENT)

@@ -3396,7 +3396,8 @@ namespace LaptopStatus
                 else if (method == "GET" && path == "/api/status")
                 {
                     status = 200;
-                    var androidJokeActive = _jokeWindow?.IsVisible == true || DateTimeOffset.UtcNow < _androidJokeTriggerUntilUtc;
+                    var windowsJokeActive = _jokeWindow?.IsVisible == true;
+                    var androidJokeTriggerActive = DateTimeOffset.UtcNow < _androidJokeTriggerUntilUtc;
                     var data = new { deviceId = _deviceId, deviceName = _deviceName, manufacturer = _manufacturer, model = _model, macAddress = _macAddress,
                         online = true, cpuPercent = Math.Round(_cpu), ramPercent = Math.Round(_ram), batteryPercent = _battery, onAcPower = IsOnAcPower(),
                         cpuTemperatureC = _hardwareSnapshot.CpuTemperatureC, gpuUsagePercent = _hardwareSnapshot.GpuUsagePercent,
@@ -3407,12 +3408,13 @@ namespace LaptopStatus
                         logicalProcessors = Environment.ProcessorCount,
                         totalPhysicalMemoryBytes = GetTotalPhysicalMemoryBytes(), osArchitecture = RuntimeInformation.OSArchitecture.ToString(),
                         osVersion = Environment.OSVersion.VersionString,
-                        jokeActive = androidJokeActive,
+                        jokeActive = windowsJokeActive,
+                        androidJokeTriggerActive,
                         androidJokeNotificationEnabled = _androidJokeNotificationEnabled,
                         androidJokeNotificationMessage = _jokeSettings.Message,
                         androidJokeBackgroundHex = _jokeSettings.BackgroundHex,
                         androidJokeIconGlyph = _jokeSettings.IconGlyph,
-                        androidJokeIconBase64 = _androidJokeNotificationEnabled && androidJokeActive
+                        androidJokeIconBase64 = _androidJokeNotificationEnabled && androidJokeTriggerActive
                             ? GetAndroidJokeIconBase64(_jokeSettings) : null,
                         androidJokeAnimation = _jokeSettings.Animation,
                         screenControlActive = _screenControlActive, screenControlPending = _screenControlPending,
