@@ -1,5 +1,19 @@
 # Changelog
 
+## v1.18.15 — 2026-11-01
+
+### Diperbaiki
+
+- Judul output terminal dipaksa satu baris agar tidak terjepit oleh pesan status panjang.
+- Status terminal dibatasi menjadi label pendek; rincian kegagalan tetap disampaikan melalui notifikasi.
+
+### Versi
+
+- Android: 1.18.15 (version code 65)
+- Windows: 2.11.21
+- Installer Windows: 2.13.1
+- Host Linux: 0.1.0
+
 ## v1.18.14 — 2026-11-01
 
 ### Diperbaiki

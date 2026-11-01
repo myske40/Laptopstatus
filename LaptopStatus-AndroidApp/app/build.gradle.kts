@@ -11,8 +11,8 @@ android {
         applicationId = "com.example.laptopstatus"
         minSdk = 24
         targetSdk = 36
-        versionCode = 64
-        versionName = "1.18.14"
+        versionCode = 65
+        versionName = "1.18.15"
     }
 
     buildTypes {

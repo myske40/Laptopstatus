@@ -3198,9 +3198,17 @@ class MainActivity : AppCompatActivity() {
         root.addView(actions, LinearLayout.LayoutParams(-1, -2).apply { topMargin = px(8) })
 
         val outputHeader = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
-        outputHeader.addView(label("OUTPUT TERMINAL", 12f, getColor(R.color.text_dim), true), LinearLayout.LayoutParams(0, -2, 1f))
-        val status = label("SIAP", 10f, getColor(R.color.accent), true)
-        outputHeader.addView(status)
+        outputHeader.addView(label("OUTPUT TERMINAL", 12f, getColor(R.color.text_dim), true).apply {
+            setSingleLine(true)
+            ellipsize = android.text.TextUtils.TruncateAt.END
+        }, LinearLayout.LayoutParams(0, -2, 1f))
+        val status = label("SIAP", 10f, getColor(R.color.accent), true).apply {
+            setSingleLine(true)
+            maxWidth = px(76)
+            ellipsize = android.text.TextUtils.TruncateAt.END
+            gravity = Gravity.CENTER_VERTICAL or Gravity.END
+        }
+        outputHeader.addView(status, LinearLayout.LayoutParams(px(76), -2))
         root.addView(outputHeader, LinearLayout.LayoutParams(-1, -2).apply { topMargin = px(12); bottomMargin = px(6) })
 
         val output = TextView(this).apply {
@@ -3962,7 +3970,14 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun updateNativeShellStatus(message: String) {
-        nativeShellStatus?.text = message
+        val normalized = message.lowercase(Locale.ROOT)
+        nativeShellStatus?.text = when {
+            listOf("gagal", "error", "tidak valid", "ditolak", "terputus", "terlalu panjang").any(normalized::contains) -> "GAGAL"
+            normalized.contains("memulai") || normalized.contains("menghubungkan") -> "MEMULAI"
+            normalized.contains("terhubung") || normalized.contains("berjalan") -> "AKTIF"
+            normalized.contains("dihentikan") || normalized.contains("selesai") || normalized.contains("dibatalkan") -> "SIAP"
+            else -> message.take(10).uppercase(Locale.ROOT)
+        }
     }
 
     private fun publishRemoteShellNotice(message: String) {
@@ -3976,7 +3991,7 @@ class MainActivity : AppCompatActivity() {
         main.post {
             nativeShellStartButton?.isEnabled = true
             val notification = message.take(140)
-            updateNativeShellStatus(notification)
+            updateNativeShellStatus("GAGAL")
             callRemoteShellJs("remoteShellError(${JSONObject.quote(notification)})")
             android.widget.Toast.makeText(this, notification, android.widget.Toast.LENGTH_LONG).show()
         }
