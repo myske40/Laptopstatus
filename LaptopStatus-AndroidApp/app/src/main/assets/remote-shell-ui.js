@@ -10,7 +10,6 @@
     .remote-shell-toolbar select,.remote-shell-input{min-width:0;flex:1;background:var(--s);color:var(--tx);border:1px solid var(--ln);border-radius:13px;padding:12px;font:inherit}
     .remote-shell-output{box-sizing:border-box;min-height:34vh;max-height:62vh;overflow:auto;margin:0;padding:16px;border:1px solid var(--ln);border-radius:15px;background:#070d15;color:#d8e4ee;font:14px/1.55 ui-monospace,Consolas,monospace;white-space:pre-wrap;overflow-wrap:anywhere;user-select:text;-webkit-user-select:text}
     .remote-shell-entry{display:flex;gap:8px;align-items:center}
-    .remote-shell-note{line-height:1.5}
     .remote-shell-stop{background:#38232b!important;color:#ff9eaa!important}
   `;
   document.head.append(style);
@@ -35,7 +34,7 @@
     </div>
     <pre class="remote-shell-output" id="remoteShellOutput" role="log" aria-live="polite">Terminal belum dimulai. Pilih PowerShell atau Command Prompt lalu tekan Mulai.</pre>
     <div class="remote-shell-entry"><input class="remote-shell-input" id="remoteShellInput" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Ketik perintah Windows" disabled><button class="act" id="remoteShellSend" type="button" disabled>Jalankan</button></div>
-    <small class="dim remote-shell-note" id="remoteShellStatus">Terhubung lewat pairing TLS. Shell berjalan dengan hak akun Windows biasa, tanpa UAC untuk perintah standar. Perintah administrator tetap memerlukan persetujuan Windows.</small>
+    <small id="remoteShellStatus" hidden></small>
   `;
   page.append(panel);
 

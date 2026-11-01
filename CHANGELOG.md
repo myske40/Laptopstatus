@@ -1,5 +1,20 @@
 # Changelog
 
+## v1.18.14 — 2026-11-01
+
+### Diperbaiki
+
+- Keterangan hak shell dihapus dari layout terminal agar tidak menyisakan teks di atas output.
+- Informasi tersebut kini muncul sebagai notifikasi singkat saat sesi terminal dimulai.
+- Area output terminal diperbesar untuk memanfaatkan ruang yang tersedia.
+
+### Versi
+
+- Android: 1.18.14 (version code 64)
+- Windows: 2.11.21
+- Installer Windows: 2.13.1
+- Host Linux: 0.1.0
+
 ## v1.18.13 — 2026-11-01
 
 ### Diperbaiki

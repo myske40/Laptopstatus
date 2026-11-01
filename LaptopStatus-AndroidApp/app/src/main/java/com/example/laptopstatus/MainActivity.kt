@@ -3223,13 +3223,8 @@ class MainActivity : AppCompatActivity() {
             addView(outputScroll, LinearLayout.LayoutParams(-1, 0, 1f))
         }
         // Keep a visible, scrollable output console while reserving room for every keyboard row.
-        val outputHeightDp = (resources.displayMetrics.heightPixels / density * .30f).toInt().coerceIn(170, 280)
+        val outputHeightDp = (resources.displayMetrics.heightPixels / density * .40f).toInt().coerceIn(200, 340)
         root.addView(outputCard, LinearLayout.LayoutParams(-1, px(outputHeightDp)))
-
-        val note = label("Standar berjalan tanpa UAC. Tindakan administrator tetap meminta persetujuan Windows.", 11f, getColor(R.color.text_dim)).apply {
-            setPadding(px(2), px(6), px(2), px(5))
-        }
-        root.addView(note, LinearLayout.LayoutParams(-1, -2))
         val inputRow = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
@@ -3810,7 +3805,12 @@ class MainActivity : AppCompatActivity() {
                     nativeShellStopButton?.isEnabled = true
                     nativeShellSendButton?.isEnabled = true
                     callRemoteShellJs("remoteShellStarted(${JSONObject.quote(sessionId)},${JSONObject.quote(type)},${JSONObject.quote(workingDirectory)})")
-                    updateNativeShellStatus(if (connectedHostIsLinux) "Shell berjalan sebagai pengguna Linux saat ini." else "Shell berjalan sebagai pengguna Windows biasa. Perintah admin tetap memerlukan UAC.")
+                    updateNativeShellStatus("TERHUBUNG")
+                    val shellNotice = if (connectedHostIsLinux)
+                        "Terminal Linux berjalan dengan hak pengguna saat ini."
+                    else
+                        "Terminal berjalan tanpa hak admin. Perintah administrator tetap memerlukan persetujuan Windows."
+                    android.widget.Toast.makeText(this@MainActivity, shellNotice, android.widget.Toast.LENGTH_LONG).show()
                     addEvent(if (connectedHostIsLinux) "Terminal Linux dimulai" else "Terminal Windows dimulai", if (connectedHostIsLinux) "Shell Linux" else "$shellName • akun Windows biasa", clock.format(Date()), R.drawable.ic_clock)
                     remoteShellPollHandler.post(remoteShellPollRunnable)
                 }
