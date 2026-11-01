@@ -184,6 +184,7 @@ class MainActivity : AppCompatActivity() {
     private var screenActive = false
     private var screenPending = false
     private var screenPasswordAccessAvailable = false
+    private var connectedHostIsLinux = false
     @Volatile private var screenSourceLabel: String? = null
     private var screenFullscreen = false
     private var demoScreenFullscreen = false
@@ -421,11 +422,19 @@ class MainActivity : AppCompatActivity() {
             confirmControl("sleep", "Sleep Windows?", "Laptop akan masuk mode sleep sekarang.")
         }
         findViewById<Button>(R.id.jokeButton).setOnClickListener {
+            if (connectedHostIsLinux) {
+                findViewById<TextView>(R.id.connectionInfo).text = "Mode Joke belum tersedia untuk Linux."
+                return@setOnClickListener
+            }
             val action = if (jokeEnabled) "joke-off" else "joke-on"
             if (jokeEnabled) worker.execute { sendControl(action) }
             else confirmControl(action, "Aktifkan Mode Joke?", "Layar laptop akan merah selama maksimal 30 detik. Pesan di layar akan menjelaskan bahwa ini hanya simulasi.")
         }
         findViewById<Button>(R.id.screenRequestButton).setOnClickListener {
+            if (connectedHostIsLinux) {
+                findViewById<TextView>(R.id.connectionInfo).text = "Kendali layar Linux belum tersedia."
+                return@setOnClickListener
+            }
             if (screenActive || screenPending) {
                 findViewById<TextView>(R.id.connectionInfo).text = "Sesi layar sudah aktif atau menunggu persetujuan Windows."
             } else {
@@ -3149,7 +3158,7 @@ class MainActivity : AppCompatActivity() {
         }
         header.addView(closeButton, LinearLayout.LayoutParams(px(48), px(48)))
         val titleBlock = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(px(12), 0, 0, 0) }
-        titleBlock.addView(label("Terminal Windows", 20f, getColor(R.color.text_main), true))
+        titleBlock.addView(label(if (connectedHostIsLinux) "Terminal Linux" else "Terminal Windows", 20f, getColor(R.color.text_main), true))
         titleBlock.addView(label("Kendali aman ke laptop", 12f, getColor(R.color.text_dim)).apply { setPadding(0, px(2), 0, 0) })
         header.addView(titleBlock, LinearLayout.LayoutParams(0, -2, 1f))
         header.addView(pill("●  TLS", getColor(R.color.accent_bg), getColor(R.color.accent), 18f).apply { textSize = 11f },
@@ -3164,12 +3173,12 @@ class MainActivity : AppCompatActivity() {
             setPadding(px(4), px(4), px(4), px(4))
             background = surface(getColor(R.color.surface), 17f)
         }
-        val powershellButton = pill("PowerShell", getColor(R.color.accent), getColor(R.color.accent_on), 14f)
-        val cmdButton = pill("Command Prompt", getColor(R.color.surface), getColor(R.color.text_dim), 14f)
+        val powershellButton = pill(if (connectedHostIsLinux) "Bash" else "PowerShell", getColor(R.color.accent), getColor(R.color.accent_on), 14f)
+        val cmdButton = pill(if (connectedHostIsLinux) "POSIX Shell" else "Command Prompt", getColor(R.color.surface), getColor(R.color.text_dim), 14f)
         shellType.addView(powershellButton, LinearLayout.LayoutParams(0, px(44), 1f))
         shellType.addView(cmdButton, LinearLayout.LayoutParams(0, px(44), 1f).apply { marginStart = px(4) })
         root.addView(shellType, LinearLayout.LayoutParams(-1, -2))
-        var selectedShellType = "powershell"
+        var selectedShellType = if (connectedHostIsLinux) "bash" else "powershell"
         fun selectShell(type: String) {
             selectedShellType = type
             val psSelected = type == "powershell"
@@ -3214,7 +3223,7 @@ class MainActivity : AppCompatActivity() {
             addView(outputScroll, LinearLayout.LayoutParams(-1, 0, 1f))
         }
         // Keep a visible, scrollable output console while reserving room for every keyboard row.
-        root.addView(outputCard, LinearLayout.LayoutParams(-1, px(116)))
+        root.addView(outputCard, LinearLayout.LayoutParams(-1, px(88)))
 
         val note = label("Standar berjalan tanpa UAC. Tindakan administrator tetap meminta persetujuan Windows.", 11f, getColor(R.color.text_dim)).apply {
             setPadding(px(2), px(6), px(2), px(5))
@@ -3361,12 +3370,12 @@ class MainActivity : AppCompatActivity() {
             val length = input.text?.length ?: 0
             input.setSelection((input.selectionStart + delta).coerceIn(0, length))
         }
-        fun addKeyRow(pageName: String, keys: List<Pair<String, () -> Unit>>, height: Int = 28) {
+        fun addKeyRow(pageName: String, keys: List<Pair<String, () -> Unit>>, height: Int = 40) {
             val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
             keys.forEach { (caption, action) ->
                 val key = pill(caption, getColor(R.color.surface_raised), getColor(R.color.text_main), 9f).apply {
-                    textSize = if (caption.length > 4) 9f else 11f
-                    setPadding(px(2), px(2), px(2), px(2))
+                    textSize = if (caption.length > 4) 11f else 13f
+                    setPadding(px(4), px(3), px(4), px(3))
                     setOnClickListener { action() }
                 }
                 if (caption in setOf("Ctrl", "Alt", "Shift", "Fn")) modifierViews.getOrPut(caption) { mutableListOf() }.add(key)
@@ -3675,13 +3684,13 @@ class MainActivity : AppCompatActivity() {
 
     private fun startRemoteShell(shellType: String) {
         val type = shellType.lowercase(Locale.ROOT)
-        if (type !in setOf("cmd", "powershell")) return
+        if (type !in setOf("cmd", "powershell", "bash", "sh")) return
         if (!laptopOnline || address.isBlank() || key.isBlank()) {
             publishRemoteShellError("Hubungkan dan pasangkan laptop terlebih dahulu.")
             return
         }
         if (!screenPasswordAccessAvailable) {
-            publishRemoteShellError("Aktifkan Password Kendali Layar di pengaturan Laptop Status Windows terlebih dahulu.")
+            publishRemoteShellError(if (connectedHostIsLinux) "Password terminal Linux tidak tersedia." else "Aktifkan Password Kendali Layar di pengaturan Laptop Status Windows terlebih dahulu.")
             return
         }
         main.post { promptRemoteShellPassword(type) }
@@ -3724,7 +3733,8 @@ class MainActivity : AppCompatActivity() {
             setTextColor(getColor(R.color.text_main))
         }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = px(16) })
         promptCard.addView(TextView(this).apply {
-            text = "Masukkan password kendali layar Windows. Laptop memverifikasinya langsung; password tidak disimpan di Android."
+            text = if (connectedHostIsLinux) "Masukkan password terminal Linux yang ditampilkan di menu tray. Password tidak disimpan di Android."
+                else "Masukkan password kendali layar Windows. Laptop memverifikasinya langsung; password tidak disimpan di Android."
             textSize = 13f
             setTextColor(getColor(R.color.text_dim))
             setLineSpacing(px(2).toFloat(), 1f)
@@ -3778,20 +3788,20 @@ class MainActivity : AppCompatActivity() {
         if (remoteShellSessionId.isNotBlank()) stopRemoteShell()
         remoteShellPollHandler.removeCallbacks(remoteShellPollRunnable)
         main.post { nativeShellStartButton?.isEnabled = false }
-        publishRemoteShellNotice("Memulai ${if (type == "cmd") "Command Prompt" else "PowerShell"} di akun Windows biasa…")
+        publishRemoteShellNotice(if (connectedHostIsLinux) "Memulai shell Linux…" else "Memulai ${if (type == "cmd") "Command Prompt" else "PowerShell"} di akun Windows biasa…")
         callRemoteShellJs("remoteShellStarting()")
         logLiveActivity("SHELL", "terminal_start_requested type=$type")
         remoteShellWorker.execute {
             try {
                 val response = remoteShellRequest("/api/shell/start", "POST", JSONObject().put("type", type).put("screenPassword", screenPassword).toString())
                 val sessionId = response.optString("sessionId")
-                if (sessionId.isBlank()) throw IllegalStateException("Windows tidak mengirim ID sesi terminal.")
+                if (sessionId.isBlank()) throw IllegalStateException(if (connectedHostIsLinux) "Linux tidak mengirim ID sesi terminal." else "Windows tidak mengirim ID sesi terminal.")
                 val workingDirectory = response.optString("workingDirectory", "")
                 main.post {
                     remoteShellSessionId = sessionId
                     remoteShellCursor = 0L
                     remoteShellPollInFlight.set(false)
-                    val shellName = if (type == "cmd") "Command Prompt" else "PowerShell"
+                    val shellName = if (connectedHostIsLinux) if (type == "cmd") "POSIX Shell" else "Bash" else if (type == "cmd") "Command Prompt" else "PowerShell"
                     val startMessage = "$shellName siap. Direktori: $workingDirectory\n"
                     nativeShellOutput?.text = startMessage
                     nativeShellInput?.isEnabled = true
@@ -3799,12 +3809,12 @@ class MainActivity : AppCompatActivity() {
                     nativeShellStopButton?.isEnabled = true
                     nativeShellSendButton?.isEnabled = true
                     callRemoteShellJs("remoteShellStarted(${JSONObject.quote(sessionId)},${JSONObject.quote(type)},${JSONObject.quote(workingDirectory)})")
-                    updateNativeShellStatus("Shell berjalan sebagai pengguna Windows biasa. Perintah admin tetap memerlukan UAC.")
-                    addEvent("Terminal Windows dimulai", "$shellName • akun Windows biasa", clock.format(Date()), R.drawable.ic_clock)
+                    updateNativeShellStatus(if (connectedHostIsLinux) "Shell berjalan sebagai pengguna Linux saat ini." else "Shell berjalan sebagai pengguna Windows biasa. Perintah admin tetap memerlukan UAC.")
+                    addEvent(if (connectedHostIsLinux) "Terminal Linux dimulai" else "Terminal Windows dimulai", if (connectedHostIsLinux) "Shell Linux" else "$shellName • akun Windows biasa", clock.format(Date()), R.drawable.ic_clock)
                     remoteShellPollHandler.post(remoteShellPollRunnable)
                 }
             } catch (error: Exception) {
-                val message = error.message ?: "Gagal membuka terminal Windows."
+                val message = error.message ?: if (connectedHostIsLinux) "Gagal membuka terminal Linux." else "Gagal membuka terminal Windows."
                 main.post { publishRemoteShellError(message) }
                 logLiveActivity("SHELL", "terminal_start_failed type=$type error=${error.javaClass.simpleName}", 'E')
             }
@@ -4180,6 +4190,7 @@ class MainActivity : AppCompatActivity() {
         address = ""
         key = ""
         laptopOnline = false
+        connectedHostIsLinux = false
         wasOnline = false
         syncMonitorService()
         addressInput.setText("")
@@ -4187,6 +4198,8 @@ class MainActivity : AppCompatActivity() {
         fingerprintInput.setText("")
         setMonitorSwitch(false)
         setRemoteControlsEnabled(false)
+        findViewById<Button>(R.id.jokeButton).visibility = View.VISIBLE
+        findViewById<Button>(R.id.screenRequestButton).visibility = View.VISIBLE
         findViewById<View>(R.id.manualConnectionProgressRow).visibility = View.GONE
         transitionStatusPill("Menunggu", "waiting")
         findViewById<TextView>(R.id.deviceSub).text = "Belum terhubung"
@@ -5663,11 +5676,14 @@ class MainActivity : AppCompatActivity() {
         if (!hadConnection) playConnectionChime(success = true)
         if (!hadConnection) logLiveActivity("CONN", "status=online")
         laptopOnline = true
+        connectedHostIsLinux = data.optString("osVersion").contains("linux", ignoreCase = true)
         latestStatusPayload = JSONObject(data.toString()).put("online", true).toString()
         pendingConnectionDeviceId = null
         laptopOnAcPower = data.optBoolean("onAcPower", false)
         setRemoteControlsEnabled(true)
         findViewById<TextView>(R.id.deviceName).text = data.optString("deviceName", "Laptop")
+        findViewById<Button>(R.id.jokeButton).visibility = if (connectedHostIsLinux) View.GONE else View.VISIBLE
+        findViewById<Button>(R.id.screenRequestButton).visibility = if (connectedHostIsLinux) View.GONE else View.VISIBLE
         transitionStatusPill("Terhubung", "connected")
         cpuRing.setMetric("${data.optInt("cpuPercent")}%", data.optInt("cpuPercent"))
         ramRing.setMetric("${data.optInt("ramPercent")}%", data.optInt("ramPercent"))

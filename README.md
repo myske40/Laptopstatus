@@ -1,15 +1,20 @@
 # LaptopStatus
 
+![LaptopStatus — kendali laptop dari Android](assets/laptopstatus-banner.svg)
+
 **Bahasa Indonesia** | [English](#english)
 
 ---
 
 ## Bahasa Indonesia
 
-LaptopStatus adalah aplikasi untuk memantau dan mengendalikan laptop Windows dari ponsel Android. Terdiri dari dua bagian:
+LaptopStatus membantu memantau dan mengendalikan laptop Windows atau Linux dari ponsel Android. Proyek ini menyediakan aplikasi Android, aplikasi Windows, dan host Linux tahap awal:
 
 - **Aplikasi Windows** (WPF, .NET 8) yang berjalan di laptop.
+- **Host Linux** (Python) untuk distro desktop berbasis systemd.
 - **Aplikasi Android** (Kotlin) sebagai pendamping di ponsel.
+
+Host Linux tahap awal tersedia di [`LaptopStatus-LinuxApp`](LaptopStatus-LinuxApp/README.md). Host ini memakai ikon tray dan sambungan TLS manual ke Android; fiturnya belum selengkap aplikasi Windows.
 
 Ponsel terhubung ke laptop lewat **Cloudflare Tunnel (cloudflared)**, jadi laptop tetap bisa dijangkau dari jaringan lain tanpa perlu mengatur port forwarding. Pemasangan perangkat dilakukan dengan pairing melalui kode QR.
 
@@ -24,6 +29,7 @@ Ponsel terhubung ke laptop lewat **Cloudflare Tunnel (cloudflared)**, jadi lapto
 - Peringatan baterai dan riwayat aktivitas.
 - Jadwal tindakan otomatis.
 - Dukungan koneksi lewat jaringan lokal (LAN), Tailscale, atau Cloudflare Tunnel.
+- Host Linux awal dengan pemantauan CPU/RAM/baterai, daftar proses, kontrol daya, dan terminal.
 - Tampilan antarmuka berbahasa Indonesia.
 
 ### Unduh
@@ -37,6 +43,7 @@ Unduh versi terbaru di halaman **Releases**:
 | `LaptopStatus-Android-<versi>.apk` | Aplikasi Android |
 | `LaptopStatus-Windows-<versi>-Portable.zip` | Aplikasi Windows portabel (tanpa instalasi) |
 | `LaptopStatus-Setup-<versi>.exe` | Installer Windows |
+| `LaptopStatus-Linux-<versi>-source.zip` | Host Linux dan panduan pemasangan |
 | `Source code (zip)` | Kode sumber, dibuat otomatis oleh GitHub |
 
 ### Cara pakai
@@ -52,6 +59,14 @@ Unduh versi terbaru di halaman **Releases**:
 1. Unduh APK dari halaman Releases.
 2. Aktifkan **Install dari sumber tidak dikenal** untuk aplikasi yang kamu pakai membuka APK (browser atau pengelola berkas).
 3. Pasang aplikasi, lalu pindai kode QR dari laptop.
+
+**Di laptop (Linux)**
+
+1. Pasang dependensi yang disebutkan di [`LaptopStatus-LinuxApp/README.md`](LaptopStatus-LinuxApp/README.md), lalu ekstrak arsip Linux.
+2. Jalankan `bash install.sh`, buka LaptopStatus dari menu aplikasi, dan pilih **Sambungkan Android…** pada ikon tray.
+3. Tambahkan koneksi secara manual di Android memakai alamat IP, token, dan fingerprint TLS yang ditampilkan.
+
+Host Linux tahap awal ditujukan untuk distro desktop berbasis systemd seperti Ubuntu, Debian, Fedora, dan Arch. Kendali layar, QR pairing, tunnel jarak jauh, dan telemetry GPU belum didukung di Linux.
 
 > **Catatan Windows:** karena aplikasi ini bukan dari Microsoft Store, Windows SmartScreen bisa menampilkan peringatan. Klik **More info**, lalu **Run anyway**.
 
@@ -82,6 +97,7 @@ APK hasil build tidak bertanda tangan. Tandatangani dengan keystore milikmu send
 ```
 LaptopStatus-WindowsApp/   Aplikasi Windows (WPF, .NET 8)
 LaptopStatus-AndroidApp/   Aplikasi Android (Kotlin)
+LaptopStatus-LinuxApp/     Host Linux (Python, tahap awal)
 LaptopStatus-Setup/        Proyek installer Windows
 ```
 
@@ -100,12 +116,15 @@ nanti yaa
 
 ## English
 
-LaptopStatus is an app for monitoring and controlling a Windows laptop from an Android phone. It has two parts:
+LaptopStatus helps you monitor and control a Windows or Linux laptop from an Android phone. The project includes an Android app, a Windows app, and an early Linux host:
 
 - A **Windows app** (WPF, .NET 8) that runs on the laptop.
 - An **Android app** (Kotlin) that runs on the phone as a companion.
+- An **early Linux host** (Python) for systemd-based desktop distributions.
 
 The phone connects to the laptop through a **Cloudflare Tunnel (cloudflared)**, so the laptop stays reachable from other networks without any port forwarding. Devices are paired with a QR code.
+
+The Linux host is in [`LaptopStatus-LinuxApp`](LaptopStatus-LinuxApp/README.md). It uses a tray icon and manual TLS pairing with Android; feature coverage is still limited compared with Windows.
 
 ### Features
 
@@ -118,6 +137,7 @@ The phone connects to the laptop through a **Cloudflare Tunnel (cloudflared)**, 
 - Battery alerts and activity history.
 - Scheduled actions.
 - Connect over a local network (LAN), Tailscale, or Cloudflare Tunnel.
+- Early Linux host with CPU/RAM/battery monitoring, process list, power control, and terminal.
 - Indonesian-language interface.
 
 ### Download
@@ -131,6 +151,7 @@ Get the latest version from the **Releases** page:
 | `LaptopStatus-Android-<version>.apk` | Android app |
 | `LaptopStatus-Windows-<version>-Portable.zip` | Portable Windows app (no installation) |
 | `LaptopStatus-Setup-<version>.exe` | Windows installer |
+| `LaptopStatus-Linux-<version>-source.zip` | Linux host and installation guide |
 | `Source code (zip)` | Source code, generated automatically by GitHub |
 
 ### Getting started
@@ -146,6 +167,14 @@ Get the latest version from the **Releases** page:
 1. Download the APK from the Releases page.
 2. Turn on **Install unknown apps** for the app you use to open the APK (browser or file manager).
 3. Install the app, then scan the QR code shown on the laptop.
+
+**On Linux**
+
+1. Install the dependencies listed in [`LaptopStatus-LinuxApp/README.md`](LaptopStatus-LinuxApp/README.md), then extract the Linux archive.
+2. Run `bash install.sh`, open LaptopStatus from the application menu, and select **Sambungkan Android…** from the tray icon.
+3. Add a manual connection in Android with the displayed IP address, token, and TLS fingerprint.
+
+The early Linux host targets systemd desktop distributions such as Ubuntu, Debian, Fedora, and Arch. Screen control, QR pairing, remote tunneling, and GPU telemetry are not available on Linux yet.
 
 > **Windows note:** because the app is not distributed through the Microsoft Store, Windows SmartScreen may show a warning. Click **More info**, then **Run anyway**.
 
@@ -176,6 +205,7 @@ The resulting APK is unsigned. Sign it with your own keystore before installing 
 ```
 LaptopStatus-WindowsApp/   Windows app (WPF, .NET 8)
 LaptopStatus-AndroidApp/   Android app (Kotlin)
+LaptopStatus-LinuxApp/     Early Linux host (Python)
 LaptopStatus-Setup/        Windows installer project
 ```
 

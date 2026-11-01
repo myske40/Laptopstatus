@@ -1,0 +1,49 @@
+# LaptopStatus Linux
+
+Host LaptopStatus untuk laptop Linux. Aplikasi berjalan sebagai ikon tray dan menyediakan API TLS yang dapat dipasangkan secara manual dari aplikasi Android.
+
+## Sistem yang didukung
+
+Target awal mencakup Ubuntu, Debian, Fedora, Arch Linux, dan distro desktop Linux lain yang menyediakan Python 3, OpenSSL, systemd, Tkinter, pystray, serta Pillow. Pengukuran CPU dan RAM menggunakan `/proc`; daftar proses menggunakan `/proc`; kontrol daya memakai `systemctl`.
+
+## Fitur awal
+
+- Status CPU, RAM, baterai, informasi sistem operasi, dan nama perangkat.
+- Daftar proses dan permintaan penghentian proses.
+- Perintah shutdown, restart, dan sleep melalui systemd.
+- Sesi terminal lokal yang diautentikasi untuk Android.
+- Sambungan TLS dengan sertifikat dan token khusus yang disimpan pada akun pengguna.
+- Ikon tray untuk menampilkan detail pairing atau keluar.
+
+Kontrol layar jarak jauh, pairing QR dengan persetujuan desktop, tunnel jarak jauh, telemetry GPU, dan integrasi native distro belum tersedia pada implementasi awal ini.
+
+## Dependensi
+
+- Python 3.10 atau lebih baru
+- OpenSSL
+- Tkinter
+- pystray
+- Pillow
+- systemd untuk perintah daya
+
+Pasang dependensi Python dari repositori distro agar cocok dengan versi Python sistem.
+
+## Pasang
+
+Jalankan `bash install.sh`, lalu buka **LaptopStatus** dari menu aplikasi. Ikon tray akan muncul setelah host aktif. Saat pertama kali dijalankan, aplikasi membuat token pairing, password terminal, dan sertifikat TLS pada `~/.config/laptopstatus/`.
+
+Pilih **Sambungkan Android…** pada menu ikon tray. Di Android, masukkan alamat IP laptop pada jaringan lokal, token pairing, dan fingerprint TLS yang ditampilkan. Terminal di Android meminta password terminal yang juga ditampilkan pada panel koneksi.
+
+Token pairing dan password terminal memberi akses ke API laptop. Simpan dan gunakan hanya pada ponsel milikmu. Berkas kredensial dibatasi hanya untuk akun Linux yang memasangnya.
+
+## Jalankan dari sumber
+
+```bash
+python3 laptopstatus_tray.py
+```
+
+Untuk menjalankan host tanpa ikon tray:
+
+```bash
+python3 laptopstatus_linux.py
+```

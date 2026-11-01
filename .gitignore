@@ -8,6 +8,7 @@ packages/
 
 # Android
 .gradle/
+.kotlin/
 build/
 .idea/
 local.properties
