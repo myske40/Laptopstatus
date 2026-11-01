@@ -8,7 +8,7 @@
     .remote-shell-card{display:flex;flex-direction:column;gap:12px}
     .remote-shell-toolbar{display:flex;gap:8px;align-items:center}
     .remote-shell-toolbar select,.remote-shell-input{min-width:0;flex:1;background:var(--s);color:var(--tx);border:1px solid var(--ln);border-radius:13px;padding:12px;font:inherit}
-    .remote-shell-output{box-sizing:border-box;min-height:260px;max-height:52vh;overflow:auto;margin:0;padding:14px;border:1px solid var(--ln);border-radius:15px;background:#070d15;color:#d8e4ee;font:12px/1.55 ui-monospace,Consolas,monospace;white-space:pre-wrap;overflow-wrap:anywhere;user-select:text;-webkit-user-select:text}
+    .remote-shell-output{box-sizing:border-box;min-height:34vh;max-height:62vh;overflow:auto;margin:0;padding:16px;border:1px solid var(--ln);border-radius:15px;background:#070d15;color:#d8e4ee;font:14px/1.55 ui-monospace,Consolas,monospace;white-space:pre-wrap;overflow-wrap:anywhere;user-select:text;-webkit-user-select:text}
     .remote-shell-entry{display:flex;gap:8px;align-items:center}
     .remote-shell-note{line-height:1.5}
     .remote-shell-stop{background:#38232b!important;color:#ff9eaa!important}
@@ -114,7 +114,6 @@
   window.LaptopStatus.remoteShellError = (message) => {
     start.disabled = false;
     status.textContent = String(message || 'Terminal gagal dijalankan.');
-    appendText(`\n[E/TERMINAL] ${status.textContent}\n`);
   };
   window.LaptopStatus.remoteShellNotice = (message) => {
     status.textContent = String(message || '');

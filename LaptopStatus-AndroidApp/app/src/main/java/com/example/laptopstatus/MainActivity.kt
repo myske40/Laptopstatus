@@ -3204,7 +3204,7 @@ class MainActivity : AppCompatActivity() {
         root.addView(outputHeader, LinearLayout.LayoutParams(-1, -2).apply { topMargin = px(12); bottomMargin = px(6) })
 
         val output = TextView(this).apply {
-            text = "Belum ada output. Mulai sesi, lalu kirim perintah untuk melihat hasilnya di sini."
+            text = "Mulai sesi terminal untuk melihat hasil perintah di sini."
             typeface = android.graphics.Typeface.MONOSPACE
             textSize = 12f
             setTextColor(getColor(R.color.text_main))
@@ -3223,7 +3223,8 @@ class MainActivity : AppCompatActivity() {
             addView(outputScroll, LinearLayout.LayoutParams(-1, 0, 1f))
         }
         // Keep a visible, scrollable output console while reserving room for every keyboard row.
-        root.addView(outputCard, LinearLayout.LayoutParams(-1, px(88)))
+        val outputHeightDp = (resources.displayMetrics.heightPixels / density * .30f).toInt().coerceIn(170, 280)
+        root.addView(outputCard, LinearLayout.LayoutParams(-1, px(outputHeightDp)))
 
         val note = label("Standar berjalan tanpa UAC. Tindakan administrator tetap meminta persetujuan Windows.", 11f, getColor(R.color.text_dim)).apply {
             setPadding(px(2), px(6), px(2), px(5))
@@ -3947,7 +3948,16 @@ class MainActivity : AppCompatActivity() {
     private fun appendRemoteShellOutput(text: String) {
         val view = nativeShellOutput ?: return
         val combined = view.text.toString() + text
-        view.text = if (combined.length > 96000) combined.takeLast(96000) else combined
+        val visibleText = if (combined.length > 96000) combined.takeLast(96000) else combined
+        val styled = android.text.SpannableStringBuilder(visibleText)
+        Regex("(?im)^.*(?:CategoryInfo|FullyQualifiedErrorId|CommandNotFoundException|ObjectNotFound).*$")
+            .findAll(visibleText).forEach { match ->
+                styled.setSpan(android.text.style.RelativeSizeSpan(.82f), match.range.first, match.range.last + 1,
+                    android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+                styled.setSpan(android.text.style.ForegroundColorSpan(getColor(R.color.text_dim)), match.range.first, match.range.last + 1,
+                    android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+            }
+        view.text = styled
         nativeShellScroll?.post { nativeShellScroll?.fullScroll(View.FOCUS_DOWN) }
     }
 
@@ -3958,7 +3968,6 @@ class MainActivity : AppCompatActivity() {
     private fun publishRemoteShellNotice(message: String) {
         main.post {
             updateNativeShellStatus(message)
-            appendRemoteShellOutput("\n[INFO] $message\n")
             callRemoteShellJs("remoteShellNotice(${JSONObject.quote(message)})")
         }
     }
@@ -3966,10 +3975,10 @@ class MainActivity : AppCompatActivity() {
     private fun publishRemoteShellError(message: String) {
         main.post {
             nativeShellStartButton?.isEnabled = true
-            updateNativeShellStatus(message)
-            appendRemoteShellOutput("\n[ERROR] $message\n")
-            callRemoteShellJs("remoteShellError(${JSONObject.quote(message)})")
-            android.widget.Toast.makeText(this, message, android.widget.Toast.LENGTH_LONG).show()
+            val notification = message.take(140)
+            updateNativeShellStatus(notification)
+            callRemoteShellJs("remoteShellError(${JSONObject.quote(notification)})")
+            android.widget.Toast.makeText(this, notification, android.widget.Toast.LENGTH_LONG).show()
         }
     }
 

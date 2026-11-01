@@ -1,5 +1,21 @@
 # Changelog
 
+## v1.18.13 — 2026-11-01
+
+### Diperbaiki
+
+- Area output terminal kini lebih besar dan menyesuaikan tinggi layar.
+- Pesan status dan kegagalan singkat ditampilkan sebagai status/toast, bukan ditambahkan ke log output.
+- Rincian error PowerShell seperti `CategoryInfo` dan `FullyQualifiedErrorId` ditampilkan lebih kecil dan redup agar hasil perintah utama lebih mudah dibaca.
+- README menambahkan tutorial pemasangan Android, Windows, dan Linux.
+
+### Versi
+
+- Android: 1.18.13 (version code 63)
+- Windows: 2.11.21
+- Installer Windows: 2.13.1
+- Host Linux: 0.1.0
+
 ## v1.18.12 — 2026-11-01
 
 ### Ditambahkan

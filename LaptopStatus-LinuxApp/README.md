@@ -28,11 +28,32 @@ Kontrol layar jarak jauh, pairing QR dengan persetujuan desktop, tunnel jarak ja
 
 Pasang dependensi Python dari repositori distro agar cocok dengan versi Python sistem.
 
+### Ubuntu dan Debian
+
+```bash
+sudo apt update
+sudo apt install python3 python3-tk python3-pil python3-pystray openssl
+```
+
+### Fedora
+
+```bash
+sudo dnf install python3 python3-tkinter python3-pillow python3-pystray openssl
+```
+
+### Arch Linux
+
+```bash
+sudo pacman -S python tk python-pillow python-pystray openssl
+```
+
 ## Pasang
 
 Jalankan `bash install.sh`, lalu buka **LaptopStatus** dari menu aplikasi. Ikon tray akan muncul setelah host aktif. Saat pertama kali dijalankan, aplikasi membuat token pairing, password terminal, dan sertifikat TLS pada `~/.config/laptopstatus/`.
 
 Pilih **Sambungkan Android…** pada menu ikon tray. Di Android, masukkan alamat IP laptop pada jaringan lokal, token pairing, dan fingerprint TLS yang ditampilkan. Terminal di Android meminta password terminal yang juga ditampilkan pada panel koneksi.
+
+Jika firewall aktif, izinkan koneksi masuk TCP port `8765` hanya pada jaringan privat/lokal.
 
 Token pairing dan password terminal memberi akses ke API laptop. Simpan dan gunakan hanya pada ponsel milikmu. Berkas kredensial dibatasi hanya untuk akun Linux yang memasangnya.
 

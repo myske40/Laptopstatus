@@ -50,21 +50,24 @@ Unduh versi terbaru di halaman **Releases**:
 
 **Di laptop (Windows)**
 
-1. Unduh dan jalankan installer, atau ekstrak ZIP portabel lalu jalankan `LaptopStatus.exe`.
-2. Ikuti panduan awal untuk menyiapkan koneksi Cloudflare.
-3. Buka jendela pairing untuk menampilkan kode QR.
+1. Unduh `LaptopStatus-Setup-<versi>.exe` dari Releases dan jalankan. Jika Windows SmartScreen muncul, pilih **More info → Run anyway**. Alternatifnya, ekstrak ZIP portabel lalu jalankan `LaptopStatus.exe`.
+2. Izinkan LaptopStatus pada Windows Firewall untuk jaringan **Private** ketika diminta. Jangan izinkan jaringan publik.
+3. Ikuti panduan pertama untuk memilih koneksi. Untuk koneksi lokal, hubungkan Android dan laptop ke Wi-Fi yang sama; Cloudflare/Tailscale dipakai bila perlu koneksi dari luar jaringan.
+4. Buka halaman pairing di aplikasi Windows dan siapkan QR untuk dipindai dari Android.
 
 **Di ponsel (Android)**
 
-1. Unduh APK dari halaman Releases.
-2. Aktifkan **Install dari sumber tidak dikenal** untuk aplikasi yang kamu pakai membuka APK (browser atau pengelola berkas).
-3. Pasang aplikasi, lalu pindai kode QR dari laptop.
+1. Unduh `LaptopStatus-Android-<versi>.apk` dari Releases.
+2. Buka berkas APK. Jika diminta, izinkan browser atau pengelola berkas tersebut memasang aplikasi dari sumber ini, lalu selesaikan pemasangan.
+3. Buka LaptopStatus dan pindai QR dari Windows. Cocokkan kode pairing di ponsel dan laptop, lalu setujui permintaan pada aplikasi Windows.
+4. Setelah terhubung, gunakan halaman Perangkat untuk status, proses, terminal, dan kontrol yang tersedia.
 
 **Di laptop (Linux)**
 
-1. Pasang dependensi yang disebutkan di [`LaptopStatus-LinuxApp/README.md`](LaptopStatus-LinuxApp/README.md), lalu ekstrak arsip Linux.
-2. Jalankan `bash install.sh`, buka LaptopStatus dari menu aplikasi, dan pilih **Sambungkan Android…** pada ikon tray.
-3. Tambahkan koneksi secara manual di Android memakai alamat IP, token, dan fingerprint TLS yang ditampilkan.
+1. Unduh dan ekstrak `LaptopStatus-Linux-0.1.0-source.zip`. Ikuti perintah dependensi yang sesuai untuk Ubuntu/Debian, Fedora, atau Arch di [`LaptopStatus-LinuxApp/README.md`](LaptopStatus-LinuxApp/README.md).
+2. Dari terminal, masuk ke folder hasil ekstrak dan jalankan `bash install.sh`. Buka **LaptopStatus** dari menu aplikasi.
+3. Klik ikon tray **LaptopStatus → Sambungkan Android…**. Biarkan aplikasi Linux berjalan dan hubungkan ponsel ke jaringan lokal yang sama.
+4. Di Android, tambahkan koneksi manual menggunakan alamat IPv4, token pairing, dan fingerprint TLS yang ditampilkan oleh ikon tray. Masukkan password terminal Linux saat membuka terminal.
 
 Host Linux tahap awal ditujukan untuk distro desktop berbasis systemd seperti Ubuntu, Debian, Fedora, dan Arch. Kendali layar, QR pairing, tunnel jarak jauh, dan telemetry GPU belum didukung di Linux.
 
@@ -158,21 +161,24 @@ Get the latest version from the **Releases** page:
 
 **On the laptop (Windows)**
 
-1. Download and run the installer, or extract the portable ZIP and run `LaptopStatus.exe`.
-2. Follow the first-run guide to set up the Cloudflare connection.
-3. Open the pairing window to show the QR code.
+1. Download `LaptopStatus-Setup-<version>.exe` from Releases and run it. If Windows SmartScreen appears, choose **More info → Run anyway**. Alternatively, extract the portable ZIP and run `LaptopStatus.exe`.
+2. Allow LaptopStatus through Windows Firewall for **Private** networks only when prompted. Do not allow public networks.
+3. Follow the first-run guide to choose a connection. For local access, connect Android and the laptop to the same Wi-Fi; use Cloudflare/Tailscale when you need access from another network.
+4. Open pairing in the Windows app and display its QR code.
 
 **On the phone (Android)**
 
-1. Download the APK from the Releases page.
-2. Turn on **Install unknown apps** for the app you use to open the APK (browser or file manager).
-3. Install the app, then scan the QR code shown on the laptop.
+1. Download `LaptopStatus-Android-<version>.apk` from Releases.
+2. Open the APK. If prompted, allow the browser or file manager to install apps from this source, then finish installation.
+3. Open LaptopStatus and scan the Windows QR code. Compare the pairing code on both devices, then approve the request in the Windows app.
+4. After connecting, use the Device page for status, processes, terminal, and available controls.
 
 **On Linux**
 
-1. Install the dependencies listed in [`LaptopStatus-LinuxApp/README.md`](LaptopStatus-LinuxApp/README.md), then extract the Linux archive.
-2. Run `bash install.sh`, open LaptopStatus from the application menu, and select **Sambungkan Android…** from the tray icon.
-3. Add a manual connection in Android with the displayed IP address, token, and TLS fingerprint.
+1. Download and extract `LaptopStatus-Linux-0.1.0-source.zip`. Follow the Ubuntu/Debian, Fedora, or Arch dependency commands in [`LaptopStatus-LinuxApp/README.md`](LaptopStatus-LinuxApp/README.md).
+2. Open a terminal in the extracted folder and run `bash install.sh`. Launch **LaptopStatus** from the application menu.
+3. Select **Sambungkan Android…** from the LaptopStatus tray icon. Keep the Linux host running and connect the phone to the same local network.
+4. In Android, add a manual connection with the IPv4 address, pairing token, and TLS fingerprint shown by the tray icon. Enter the Linux terminal password when opening a terminal.
 
 The early Linux host targets systemd desktop distributions such as Ubuntu, Debian, Fedora, and Arch. Screen control, QR pairing, remote tunneling, and GPU telemetry are not available on Linux yet.
 
