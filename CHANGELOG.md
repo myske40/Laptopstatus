@@ -1,5 +1,20 @@
 # Changelog
 
+## v1.18.16 — 2026-11-03
+
+### Diperbaiki
+
+- Windows memberi notifikasi ketika jadwal shutdown, restart, atau sleep dibuat.
+- Jadwal dibatalkan jika Windows baru dinyalakan setelah waktu target, sehingga hitung mundur tidak berjalan tiba-tiba.
+- Dokumentasi jadwal Windows dan Android disesuaikan dengan perilaku pemulihan terbaru.
+
+### Versi
+
+- Android: 1.18.15 (version code 65; tidak berubah)
+- Windows: 2.11.22
+- Installer Windows: 2.13.2
+- Linux host: 0.1.0
+
 ## v1.18.15 — 2026-11-01
 
 ### Diperbaiki

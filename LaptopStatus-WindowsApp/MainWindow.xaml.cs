@@ -124,6 +124,7 @@ namespace LaptopStatus
         private readonly object _scheduledPowerGate = new();
         private readonly DispatcherTimer _scheduledPowerTimer = new() { Interval = TimeSpan.FromSeconds(1) };
         private ScheduledPower? _scheduledPower;
+        private ScheduledPower? _expiredScheduledPowerOnStartup;
         private readonly object _scheduledRoutinesGate = new();
         private List<ScheduledRoutine> _scheduledRoutines = CreateDefaultScheduledRoutines();
         private bool _cloudflareSetupRunning;
@@ -221,6 +222,11 @@ namespace LaptopStatus
             _scheduledPowerTimer.Start();
 
             _trayIcon = CreateTrayIcon();
+            if (_expiredScheduledPowerOnStartup is { } expiredSchedule)
+            {
+                ShowExpiredScheduledPowerNotice(expiredSchedule);
+                _expiredScheduledPowerOnStartup = null;
+            }
             _listener = new TcpListener(IPAddress.Any, Port);
             _screenListener = new TcpListener(IPAddress.Any, ScreenPort);
             var listenersStarted = false;
@@ -4003,6 +4009,14 @@ namespace LaptopStatus
                     DeleteScheduledPowerResumeStartup();
                     return;
                 }
+                var scheduledAt = DateTimeOffset.FromUnixTimeMilliseconds(schedule.AtUtc);
+                var estimatedBootTime = DateTimeOffset.UtcNow - TimeSpan.FromMilliseconds(Environment.TickCount64);
+                if (estimatedBootTime > scheduledAt)
+                {
+                    CancelScheduledPower();
+                    _expiredScheduledPowerOnStartup = schedule;
+                    return;
+                }
                 lock (_scheduledPowerGate) _scheduledPower = schedule;
                 validRecordLoaded = true;
                 try
@@ -4222,14 +4236,32 @@ namespace LaptopStatus
             var localTime = "waktu yang dijadwalkan";
             try { localTime = DateTimeOffset.FromUnixTimeMilliseconds(schedule.AtUtc).ToLocalTime().ToString("dd MMM yyyy, HH:mm"); }
             catch (ArgumentOutOfRangeException) { }
-            var notice = $"Jadwal untuk {actionName} dibuat pada {localTime}.";
+            var notice = $"Jadwal untuk {actionName} aktif pada {localTime}.";
             if (!string.IsNullOrWhiteSpace(schedule.Message))
             {
                 var customMessage = schedule.Message.Trim();
                 if (customMessage.Length > 150) customMessage = customMessage[..150] + "…";
                 notice += $" Pesan: {customMessage}";
             }
-            _trayIcon.ShowBalloonTip(6000, "Jadwal daya Windows", notice, WinForms.ToolTipIcon.Info);
+            var title = schedule.Action == "shutdown" ? "Shutdown terjadwal aktif" : "Jadwal daya Windows aktif";
+            _trayIcon.ShowBalloonTip(6000, title, notice, WinForms.ToolTipIcon.Info);
+        }
+
+        private void ShowExpiredScheduledPowerNotice(ScheduledPower schedule)
+        {
+            var actionName = schedule.Action switch
+            {
+                "shutdown" => "Shutdown",
+                "restart" => "Restart",
+                "sleep" => "Sleep",
+                _ => "Jadwal daya"
+            };
+            var localTime = DateTimeOffset.FromUnixTimeMilliseconds(schedule.AtUtc).ToLocalTime().ToString("dd MMM yyyy, HH:mm");
+            _trayIcon.ShowBalloonTip(
+                7000,
+                "Jadwal terlewat",
+                $"{actionName} pukul {localTime} tidak dijalankan karena laptop sedang mati. Jadwal telah dibatalkan.",
+                WinForms.ToolTipIcon.Warning);
         }
 
         private void RegisterConnectionSound(bool success, string connectionKey)
