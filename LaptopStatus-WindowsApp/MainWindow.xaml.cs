@@ -53,6 +53,7 @@ namespace LaptopStatus
         private readonly string _pairingKey;
         private readonly X509Certificate2 _screenCertificate;
         private readonly WinForms.NotifyIcon _trayIcon;
+        private PowerScheduleNotificationWindow? _powerScheduleNotificationWindow;
         private readonly System.Drawing.Icon? _applicationIcon;
         private readonly DispatcherTimer _screenSessionTimer;
         private readonly string _screenAccessSettingsPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "LaptopStatus", "screen-access.json");
@@ -4245,6 +4246,12 @@ namespace LaptopStatus
             }
             var title = schedule.Action == "shutdown" ? "Shutdown terjadwal aktif" : "Jadwal daya Windows aktif";
             _trayIcon.ShowBalloonTip(6000, title, notice, WinForms.ToolTipIcon.Info);
+            if (_powerScheduleNotificationWindow is { IsVisible: true })
+                _powerScheduleNotificationWindow.Close();
+            _powerScheduleNotificationWindow = new PowerScheduleNotificationWindow(title, notice);
+            _powerScheduleNotificationWindow.Closed += (_, _) => _powerScheduleNotificationWindow = null;
+            _powerScheduleNotificationWindow.Show();
+            _powerScheduleNotificationWindow.StartDismissTimer();
         }
 
         private void ShowExpiredScheduledPowerNotice(ScheduledPower schedule)

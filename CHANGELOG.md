@@ -1,5 +1,18 @@
 # Changelog
 
+## v1.18.17 — 2026-11-03
+
+### Diperbaiki
+
+- Notifikasi jadwal daya kini muncul sebagai pemberitahuan di layar Windows, selain notifikasi ikon tray yang dapat disembunyikan Windows.
+
+### Versi
+
+- Android: 1.18.15 (version code 65; tidak berubah)
+- Windows: 2.11.23
+- Installer Windows: 2.13.3
+- Linux host: 0.1.0
+
 ## v1.18.16 — 2026-11-03
 
 ### Diperbaiki
