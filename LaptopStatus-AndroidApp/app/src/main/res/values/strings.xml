@@ -2,6 +2,7 @@
 <resources>
     <string name="app_name">Status Perangkat</string>
     <string name="app_publisher">PT HAHA NASIONAL</string>
+    <string name="app_description">Aplikasi pemantauan laptop oleh PT HAHA NASIONAL.</string>
     <string name="app_function_display_description">Pantau status laptop Windows, cari proses, dan buka halaman kontrol dengan persetujuan pengguna.</string>
     <string name="shortcut_status">Status laptop</string>
     <string name="shortcut_status_long">Buka status laptop Windows</string>

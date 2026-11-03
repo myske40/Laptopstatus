@@ -1298,11 +1298,11 @@
 
 </LinearLayout>
 
-    <WebView
-        android:id="@+id/motionDemoWebView"
+    <ViewStub
+        android:id="@+id/motionDemoWebViewStub"
+        android:inflatedId="@+id/motionDemoWebView"
+        android:layout="@layout/motion_demo_webview"
         android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        android:background="#090F18"
-        android:visibility="gone" />
+        android:layout_height="match_parent" />
 
 </FrameLayout>

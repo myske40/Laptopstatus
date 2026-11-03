@@ -7,15 +7,17 @@
     <UseWindowsForms>true</UseWindowsForms>
     <Nullable>enable</Nullable>
     <ApplicationIcon>Assets\laptop-status.ico</ApplicationIcon>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationHighDpiMode>PerMonitorV2</ApplicationHighDpiMode>
     <AssemblyName>LaptopStatus</AssemblyName>
     <RootNamespace>LaptopStatus</RootNamespace>
     <Company>PT HAHA NASIONAL</Company>
     <Authors>PT HAHA NASIONAL</Authors>
     <Product>Laptop Status</Product>
     <Copyright>Copyright © 2026 PT HAHA NASIONAL</Copyright>
-    <Version>2.11.23</Version>
-    <AssemblyVersion>2.11.23.0</AssemblyVersion>
-    <FileVersion>2.11.23.0</FileVersion>
+    <Version>2.11.30</Version>
+    <AssemblyVersion>2.11.30.0</AssemblyVersion>
+    <FileVersion>2.11.30.0</FileVersion>
   </PropertyGroup>
 
   <ItemGroup>

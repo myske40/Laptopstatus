@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="360" viewBox="0 0 1200 360" role="img" aria-labelledby="title desc">
+  <title id="title">LaptopStatus — 100% AI-generated</title>
+  <desc id="desc">Banner bergaya gelap dan mint yang menjelaskan alasan penggunaan AI: mempercepat pengembangan lintas platform, analisis bug, dan iterasi antarmuka.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#07111f"/><stop offset="1" stop-color="#142638"/></linearGradient>
+    <linearGradient id="mint" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#65e7c4"/><stop offset="1" stop-color="#28b997"/></linearGradient>
+    <filter id="glow" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="18"/></filter>
+  </defs>
+  <rect width="1200" height="360" rx="28" fill="url(#bg)"/>
+  <circle cx="965" cy="174" r="150" fill="#38d4b0" opacity=".12" filter="url(#glow)"/>
+  <path d="M40 310h1120" stroke="#274153" stroke-width="1" opacity=".65"/>
+  <g font-family="Segoe UI, Inter, Arial, sans-serif">
+    <rect x="64" y="56" width="310" height="38" rx="19" fill="#173244"/>
+    <circle cx="86" cy="75" r="6" fill="url(#mint)"/>
+    <text x="104" y="80" fill="#71e4c6" font-size="13" font-weight="700" letter-spacing="1.2">CERITA DI BALIK LAPTOPSTATUS</text>
+    <text x="64" y="157" fill="#f4f8fb" font-size="43" font-weight="750">100% AI-GENERATED</text>
+    <text x="64" y="195" fill="#c2d1dc" font-size="18">AI mempercepat ide menjadi aplikasi lintas platform.</text>
+    <g font-size="13" font-weight="600">
+      <rect x="64" y="226" width="260" height="54" rx="14" fill="#142a3b" stroke="#274153"/>
+      <circle cx="88" cy="253" r="10" fill="#173f3d"/><path d="M83 253h10m-5-5v10" stroke="#71e4c6" stroke-width="1.8" stroke-linecap="round"/>
+      <text x="108" y="250" fill="#edf8f6">Lintas platform</text><text x="108" y="268" fill="#8da4b3" font-size="11">Android • Windows • Linux</text>
+      <rect x="336" y="226" width="260" height="54" rx="14" fill="#142a3b" stroke="#274153"/>
+      <circle cx="360" cy="253" r="10" fill="#173f3d"/><path d="M360 246v8l5 3" fill="none" stroke="#71e4c6" stroke-width="1.8" stroke-linecap="round"/>
+      <text x="380" y="250" fill="#edf8f6">Analisis bug lebih cepat</text><text x="380" y="268" fill="#8da4b3" font-size="11">Kode • log • perbaikan</text>
+      <rect x="608" y="226" width="260" height="54" rx="14" fill="#142a3b" stroke="#274153"/>
+      <circle cx="632" cy="253" r="10" fill="#173f3d"/><path d="M627 250h10M627 255h7" stroke="#71e4c6" stroke-width="1.8" stroke-linecap="round"/>
+      <text x="652" y="250" fill="#edf8f6">Iterasi antarmuka</text><text x="652" y="268" fill="#8da4b3" font-size="11">Berdasarkan screenshot &amp; masukan</text>
+    </g>
+    <g transform="translate(928 73)">
+      <rect x="0" y="0" width="200" height="200" rx="28" fill="#0b1623" stroke="#355063" stroke-width="2"/>
+      <circle cx="100" cy="72" r="35" fill="#173f3d"/>
+      <path d="M100 48v48M76 72h48M83 55l34 34M117 55L83 89" stroke="url(#mint)" stroke-width="3" stroke-linecap="round"/>
+      <rect x="34" y="125" width="132" height="34" rx="17" fill="url(#mint)"/>
+      <text x="100" y="147" text-anchor="middle" fill="#09202a" font-size="13" font-weight="800" letter-spacing="1">AI + UMPAN BALIK</text>
+      <text x="100" y="181" text-anchor="middle" fill="#c2d1dc" font-size="11">Kode dibuat AI • arah dari pengguna</text>
+    </g>
+    <text x="64" y="329" fill="#8da4b3" font-size="11">AI membantu membangun dan memperbaiki. Pengguna menetapkan tujuan, menguji hasil, dan menentukan rilis.</text>
+  </g>
+</svg>

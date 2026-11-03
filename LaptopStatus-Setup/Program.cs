@@ -31,7 +31,7 @@ internal sealed class SetupForm : Form
     private readonly Panel _header = new() { Dock = DockStyle.Top, Height = 76, BackColor = Color.FromArgb(12, 18, 26) };
     private readonly Panel _footer = new() { Dock = DockStyle.Bottom, Height = 72, BackColor = Color.FromArgb(12, 18, 26), Padding = new Padding(0, 12, 0, 12) };
     private readonly VScrollBar _pageScrollBar = new() { Dock = DockStyle.Right, Width = SystemInformation.VerticalScrollBarWidth, Visible = false, SmallChange = 32 };
-    private readonly FlowLayoutPanel _footerButtons = new() { Dock = DockStyle.Right, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, FlowDirection = FlowDirection.LeftToRight, WrapContents = false, Padding = new Padding(0, 0, 24, 0), BackColor = Color.Transparent };
+    private readonly FlowLayoutPanel _footerButtons = new() { Dock = DockStyle.Fill, AutoSize = false, FlowDirection = FlowDirection.LeftToRight, WrapContents = false, Padding = new Padding(0, 0, 24, 0), BackColor = Color.Transparent };
     private readonly FlowLayoutPanel _pageBody = new() { Location = Point.Empty, FlowDirection = FlowDirection.TopDown, WrapContents = false, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, Padding = new Padding(28, 24, 28, 28), BackColor = Color.FromArgb(18, 24, 33) };
     private readonly string _defaultInstallPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Programs", "LaptopStatus");
     private readonly Timer _installStatusTimer = new() { Interval = 1050 };
@@ -67,11 +67,11 @@ internal sealed class SetupForm : Form
         AutoScaleMode = AutoScaleMode.Dpi;
         AutoScaleDimensions = new SizeF(96f, 96f);
         var workArea = Screen.FromPoint(Cursor.Position).WorkingArea;
-        var formWidth = Math.Min(820, Math.Max(460, workArea.Width - 80));
-        var formHeight = Math.Min(700, Math.Max(500, workArea.Height - 80));
+        var formWidth = Math.Max(Math.Min(360, workArea.Width), Math.Min(820, workArea.Width - 48));
+        var formHeight = Math.Max(Math.Min(360, workArea.Height), Math.Min(700, workArea.Height - 48));
         ClientSize = new Size(formWidth, formHeight);
         FormBorderStyle = FormBorderStyle.FixedDialog;
-        MinimumSize = new Size(Math.Min(620, formWidth), Math.Min(480, formHeight));
+        MinimumSize = new Size(Math.Min(620, formWidth), Math.Min(440, formHeight));
         MaximizeBox = false;
         MinimizeBox = false;
         StartPosition = FormStartPosition.CenterScreen;
@@ -102,6 +102,16 @@ internal sealed class SetupForm : Form
             ForeColor = Color.FromArgb(167, 181, 197),
             Font = new Font("Segoe UI", 9)
         });
+        _header.Controls.Add(new Label
+        {
+            Text = "PT HAHA NASIONAL",
+            Anchor = AnchorStyles.Top | AnchorStyles.Right,
+            Location = new Point(Math.Max(470, formWidth - 205), 28),
+            Size = new Size(170, 24),
+            TextAlign = ContentAlignment.MiddleRight,
+            ForeColor = Color.FromArgb(114, 228, 191),
+            Font = new Font("Segoe UI Semibold", 9, FontStyle.Bold)
+        });
         _installStatusTimer.Tick += (_, _) =>
         {
             if (_installStatusLabel is null || _installStatusLabel.IsDisposed) return;
@@ -112,6 +122,7 @@ internal sealed class SetupForm : Form
         _pageScrollBar.Scroll += (_, _) => _pageBody.Top = -_pageScrollBar.Value;
         _content.ClientSizeChanged += (_, _) => LayoutPageBody();
         _footer.Controls.Add(_footerButtons);
+        _footer.SizeChanged += (_, _) => LayoutFooterButtons();
         Controls.Add(_content);
         Controls.Add(_pageScrollBar);
         Controls.Add(_footer);
@@ -188,7 +199,20 @@ internal sealed class SetupForm : Form
         button.MouseLeave += (_, _) => AnimateButtonColor(button, (Color)button.Tag);
         button.Click += click;
         _footerButtons.Controls.Add(button);
+        LayoutFooterButtons();
         return button;
+    }
+
+    private void LayoutFooterButtons()
+    {
+        if (_footer.IsDisposed || _footerButtons.IsDisposed) return;
+        var requiredWidth = _footerButtons.Controls.Cast<Control>().Sum(control => Math.Max(control.Width, control.GetPreferredSize(Size.Empty).Width) + control.Margin.Horizontal)
+            + _footerButtons.Padding.Horizontal;
+        var wraps = requiredWidth > Math.Max(1, _footer.ClientSize.Width);
+        _footer.Height = wraps ? 112 : 72;
+        _footerButtons.WrapContents = wraps;
+        _footerButtons.Padding = wraps ? new Padding(8, 3, 16, 3) : new Padding(0, 0, 24, 0);
+        _footerButtons.PerformLayout();
     }
 
     private FlowLayoutPanel CreateCard()
@@ -232,6 +256,7 @@ internal sealed class SetupForm : Form
         _pageLayoutBusy = true;
         try
         {
+            LayoutFooterButtons();
             for (var pass = 0; pass < 2; pass++)
             {
                 var bodyWidth = _content.ClientSize.Width;
@@ -698,7 +723,7 @@ internal sealed class SetupForm : Form
                 "$tailscaleRule = 'LaptopStatus Tailscale remote'\n" +
                 "Get-NetFirewallRule -DisplayName $lanRule -ErrorAction SilentlyContinue | Remove-NetFirewallRule -ErrorAction SilentlyContinue\n" +
                 "Get-NetFirewallRule -DisplayName $tailscaleRule -ErrorAction SilentlyContinue | Remove-NetFirewallRule -ErrorAction SilentlyContinue\n" +
-                "New-NetFirewallRule -DisplayName $lanRule -Direction Inbound -Action Allow -Program $args[0] -Protocol TCP -LocalPort 8765,8767 -RemoteAddress LocalSubnet -Profile Any | Out-Null\n" +
+                "New-NetFirewallRule -DisplayName $lanRule -Direction Inbound -Action Allow -Program $args[0] -Protocol TCP -LocalPort 8765,8767 -RemoteAddress LocalSubnet -Profile Private,Domain | Out-Null\n" +
                 "New-NetFirewallRule -DisplayName $tailscaleRule -Direction Inbound -Action Allow -Program $args[0] -Protocol TCP -LocalPort 8765,8767 -RemoteAddress '100.64.0.0/10' -Profile Any | Out-Null\n",
                 new UTF8Encoding(encoderShouldEmitUTF8Identifier: true));
             var startInfo = new ProcessStartInfo(Path.Combine(Environment.SystemDirectory, "WindowsPowerShell", "v1.0", "powershell.exe"))
@@ -959,7 +984,7 @@ internal sealed class SetupForm : Form
     {
         using var key = Registry.CurrentUser.CreateSubKey(@"Software\Microsoft\Windows\CurrentVersion\Uninstall\LaptopStatus", writable: true);
         key.SetValue("DisplayName", "Laptop Status");
-        key.SetValue("DisplayVersion", "2.11.13");
+        key.SetValue("DisplayVersion", "2.11.30");
         key.SetValue("Publisher", "PT HAHA NASIONAL");
         key.SetValue("InstallLocation", installDir);
         key.SetValue("UninstallString", "powershell.exe -NoProfile -ExecutionPolicy Bypass -File \"" + Path.Combine(installDir, "Uninstall-LaptopStatus.ps1") + "\"");

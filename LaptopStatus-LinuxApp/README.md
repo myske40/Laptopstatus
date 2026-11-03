@@ -49,13 +49,15 @@ sudo pacman -S python tk python-pillow python-pystray openssl
 
 ## Pasang
 
-Jalankan `bash install.sh`, lalu buka **LaptopStatus** dari menu aplikasi. Ikon tray akan muncul setelah host aktif. Saat pertama kali dijalankan, aplikasi membuat token pairing, password terminal, dan sertifikat TLS pada `~/.config/laptopstatus/`.
+Jalankan `bash install.sh`. Installer menambahkan LaptopStatus ke menu aplikasi dan autostart sesi desktop. Saat pertama kali dijalankan, aplikasi membuat token pairing, password terminal, dan sertifikat TLS pada `~/.config/laptopstatus/`.
 
 Pilih **Sambungkan Android…** pada menu ikon tray. Di Android, masukkan alamat IP laptop pada jaringan lokal, token pairing, dan fingerprint TLS yang ditampilkan. Terminal di Android meminta password terminal yang juga ditampilkan pada panel koneksi.
 
-Jika firewall aktif, izinkan koneksi masuk TCP port `8765` hanya pada jaringan privat/lokal.
+Server hanya menerima perangkat dengan alamat loopback, LAN privat, atau Tailscale. Jika firewall aktif, izinkan koneksi masuk TCP port `8765` hanya dari jaringan privat/lokal. Server memakai TLS, membatasi percobaan autentikasi, permintaan serentak, ukuran body, jumlah sesi terminal, dan usia sesi.
 
-Token pairing dan password terminal memberi akses ke API laptop. Simpan dan gunakan hanya pada ponsel milikmu. Berkas kredensial dibatasi hanya untuk akun Linux yang memasangnya.
+Token pairing dan password terminal memberi akses ke API laptop. Simpan dan gunakan hanya pada ponsel milikmu. Berkas kredensial dibatasi hanya untuk akun Linux yang memasangnya; kredensial tidak dicetak ke log.
+
+Secara bawaan host menerima koneksi dari jaringan agar Android dapat tersambung. Untuk membatasi host ke laptop itu sendiri, jalankan dengan `LAPTOPSTATUS_BIND=127.0.0.1`; mode tersebut tidak menerima koneksi Android dari perangkat lain.
 
 ## Jalankan dari sumber
 

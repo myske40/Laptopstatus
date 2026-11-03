@@ -7,7 +7,7 @@ Setup meminta UAC saat pemasangan untuk mendaftarkan tugas Windows. Saat aplikas
 ## Menjalankan
 
 1. Buka `LaptopStatus.csproj` di Visual Studio 2022 atau jalankan aplikasi yang sudah dipasang.
-2. Izinkan aplikasi menerima koneksi pada jaringan privat ketika Windows Firewall bertanya.
+2. Izinkan aplikasi menerima koneksi pada jaringan privat ketika Windows Firewall bertanya. Installer membatasi aturan LAN ke profil Private/Domain dan Tailscale ke rentang alamat Tailscale.
 3. Pastikan ponsel dan laptop terhubung ke Wi-Fi yang sama. Pilih laptop yang ditemukan di Android atau pindai QR dari Ringkasan Windows, lalu setujui kode pairing pada Windows.
 
 API hanya menerima koneksi TLS dengan fingerprint sertifikat yang dipasangkan di Android dan header `Authorization: Bearer <kunci>`. Kunci pairing dan telemetri tidak dikirim lewat HTTP tanpa enkripsi. Aplikasi tidak memasang service tersembunyi dan melayani Android selama proses aplikasi berjalan, termasuk saat jendelanya disembunyikan ke tray.

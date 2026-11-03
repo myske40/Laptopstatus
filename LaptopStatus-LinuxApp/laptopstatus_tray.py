@@ -55,7 +55,7 @@ def main() -> None:
     server = subprocess.Popen([sys.executable, str(HERE / "laptopstatus_linux.py")], cwd=HERE)
     def stop(_icon, _item):
         server.terminate()
-        server.wait(timeout=5)
+        server.wait(timeout=15)
         _icon.stop()
 
     icon = pystray.Icon("laptopstatus", make_icon(), "LaptopStatus Linux", menu=pystray.Menu(

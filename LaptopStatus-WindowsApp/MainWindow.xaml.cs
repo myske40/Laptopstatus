@@ -25,6 +25,7 @@ using System.Windows.Media.Effects;
 using System.Windows.Threading;
 using System.Runtime.InteropServices;
 using System.Windows.Input;
+using Ellipse = System.Windows.Shapes.Ellipse;
 using System.ComponentModel;
 using System.Net.NetworkInformation;
 using System.Net.Http;
@@ -42,7 +43,9 @@ namespace LaptopStatus
         private const int ScreenPasswordIterations = 310000;
         private const int MaxScreenPasswordFailuresPerMinute = 5;
         private readonly PerformanceCounter _cpuCounter;
-        private readonly HardwareTelemetry _hardwareTelemetry;
+        private readonly Task<HardwareTelemetry> _hardwareTelemetryTask;
+        private int _hardwareReadInProgress;
+        private DateTime _lastHardwareTelemetryReadUtc = DateTime.MinValue;
         private readonly Dictionary<string, ImageSource?> _brandLogoCache = new(StringComparer.OrdinalIgnoreCase);
         private readonly ConcurrentDictionary<string, long> _connectionChimeLastPlayed = new(StringComparer.OrdinalIgnoreCase);
         private readonly List<MediaPlayer> _activeConnectionChimes = new();
@@ -53,7 +56,15 @@ namespace LaptopStatus
         private readonly string _pairingKey;
         private readonly X509Certificate2 _screenCertificate;
         private readonly WinForms.NotifyIcon _trayIcon;
-        private PowerScheduleNotificationWindow? _powerScheduleNotificationWindow;
+        private readonly TrayIconAnimator _trayIconAnimator;
+        private readonly List<TrayToastWindow> _trayToasts = new();
+        private TrayFlyoutWindow? _trayFlyout;
+        private bool _trayReady;
+        private bool _trayFallbackEnabled;
+        private WinForms.ToolStripMenuItem? _trayRetryNewMenuItem;
+        private WinForms.ContextMenuStrip? _legacyTrayMenu;
+        private string _trayAndroidState = "none";
+        private readonly DispatcherTimer _trayRejectedStateTimer = new() { Interval = TimeSpan.FromSeconds(6) };
         private readonly System.Drawing.Icon? _applicationIcon;
         private readonly DispatcherTimer _screenSessionTimer;
         private readonly string _screenAccessSettingsPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "LaptopStatus", "screen-access.json");
@@ -63,7 +74,12 @@ namespace LaptopStatus
         private readonly object _screenPasswordGate = new();
         private readonly object _pairedDevicesGate = new();
         private readonly Queue<DateTimeOffset> _screenPasswordFailures = new();
-        private readonly Queue<string> _windowsHistory = new();
+        private readonly Queue<WindowsHistoryEntry> _windowsHistory = new();
+        private readonly string _windowsHistoryPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "LaptopStatus", "windows-history.json");
+        private readonly string _legacyWindowsHistoryPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "LaptopStatus", "windows-history.log");
+        private string _historyFilter = "all";
+        private long _lastAndroidStatusUtcMs;
+        private bool _batteryLowHistoryRecorded;
         private readonly string _deviceName = Environment.MachineName;
         private readonly string _deviceId;
         private readonly string _manufacturer;
@@ -171,6 +187,7 @@ namespace LaptopStatus
         {
             _resumingScheduledPower = resumeScheduledPower;
             InitializeComponent();
+            LoadWindowsHistory();
             SourceInitialized += EnableShellFileDrop;
             LoadAppearanceSettings();
             LoadJokeSettings();
@@ -193,9 +210,20 @@ namespace LaptopStatus
             (_manufacturer, _model) = LoadHardwareIdentity();
             _macAddress = LoadActiveNetworkMac();
             LoadPairedDevices();
-            LoadScheduledPower();
+            if (_resumingScheduledPower) LoadScheduledPower();
             LoadScheduledRoutines();
-            Loaded += (_, _) => MoveNavIndicator(SummaryNav, animate: false);
+            Loaded += async (_, _) =>
+            {
+                MoveNavIndicator(SummaryNav, animate: false);
+                if (_resumingScheduledPower) return;
+                _ = RefreshPairingAddressesAsync();
+                await Task.Run(LoadScheduledPower);
+                if (_expiredScheduledPowerOnStartup is { } expiredSchedule)
+                {
+                    ShowExpiredScheduledPowerNotice(expiredSchedule);
+                    _expiredScheduledPowerOnStartup = null;
+                }
+            };
             PairingKeyText.Text = _pairingKey;
             CertificateFingerprintText.Text = Convert.ToHexString(SHA256.HashData(_screenCertificate.RawData));
             LoadScreenAccessSettings();
@@ -206,28 +234,32 @@ namespace LaptopStatus
             ToggleSavedScreenPasswordButton.Visibility = string.IsNullOrEmpty(_screenAccessPasswordForDisplay)
                 ? Visibility.Collapsed
                 : Visibility.Visible;
-            try { AddressText.Text = string.Join("   ", GetPairingAddresses()); }
-            catch (SocketException) { AddressText.Text = "Alamat IP belum tersedia"; }
-            if (string.IsNullOrWhiteSpace(AddressText.Text)) AddressText.Text = "Tidak ada alamat Wi-Fi/LAN";
+            AddressText.Text = "Mencari alamat jaringan…";
 
             _cpuCounter = new PerformanceCounter("Processor", "% Processor Time", "_Total");
             _cpuCounter.NextValue();
-            _hardwareTelemetry = new HardwareTelemetry();
+            _hardwareTelemetryTask = Task.Run(() => new HardwareTelemetry());
             try { _applicationIcon = System.Drawing.Icon.ExtractAssociatedIcon(Environment.ProcessPath ?? Process.GetCurrentProcess().MainModule?.FileName ?? ""); }
             catch { _applicationIcon = null; }
             _timer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(2) };
             _timer.Tick += (_, _) => RefreshStats();
             _timer.Start();
-            RefreshStats();
             _scheduledPowerTimer.Tick += (_, _) => { if (!CheckScheduledPower()) CheckScheduledRoutines(); };
             _scheduledPowerTimer.Start();
 
             _trayIcon = CreateTrayIcon();
-            if (_expiredScheduledPowerOnStartup is { } expiredSchedule)
+            _trayIconAnimator = new TrayIconAnimator(_trayIcon);
+            _trayIconAnimator.SetMotionEnabled(MotionAnimationsEnabled);
+            _trayReady = true;
+            RefreshStats();
+            _trayRejectedStateTimer.Tick += (_, _) =>
             {
-                ShowExpiredScheduledPowerNotice(expiredSchedule);
-                _expiredScheduledPowerOnStartup = null;
-            }
+                _trayRejectedStateTimer.Stop();
+                if (_trayAndroidState != "rejected") return;
+                _trayAndroidState = "none";
+                UpdateTrayFlyout();
+            };
+            UpdateTrayFlyout();
             _listener = new TcpListener(IPAddress.Any, Port);
             _screenListener = new TcpListener(IPAddress.Any, ScreenPort);
             var listenersStarted = false;
@@ -437,12 +469,10 @@ namespace LaptopStatus
         {
             try
             {
-                var activeAddresses = Dns.GetHostEntry(Dns.GetHostName()).AddressList
-                    .Where(address => address.AddressFamily == AddressFamily.InterNetwork && !IPAddress.IsLoopback(address))
-                    .Select(address => address.ToString()).ToHashSet(StringComparer.OrdinalIgnoreCase);
                 var nic = NetworkInterface.GetAllNetworkInterfaces()
                     .Where(item => item.OperationalStatus == OperationalStatus.Up && item.NetworkInterfaceType != NetworkInterfaceType.Loopback)
-                    .FirstOrDefault(item => item.GetIPProperties().UnicastAddresses.Any(unicast => activeAddresses.Contains(unicast.Address.ToString())));
+                    .FirstOrDefault(item => item.GetIPProperties().UnicastAddresses.Any(unicast =>
+                        unicast.Address.AddressFamily == AddressFamily.InterNetwork && !IPAddress.IsLoopback(unicast.Address)));
                 var bytes = nic?.GetPhysicalAddress().GetAddressBytes();
                 return bytes is { Length: 6 } ? string.Join(":", bytes.Select(value => value.ToString("X2"))) : "";
             }
@@ -463,10 +493,20 @@ namespace LaptopStatus
                 .ToList();
             var tailscale = GetTailscaleAddresses();
             var all = interfaces.Concat(tailscale).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
-            if (all.Count > 0) return all;
-            return AddressText.Text.Split(new[] { ' ', '\t', '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries)
-                .Where(value => IPAddress.TryParse(value, out _))
-                .Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+            return all;
+        }
+
+        private async Task RefreshPairingAddressesAsync()
+        {
+            string display;
+            try
+            {
+                var addresses = await Task.Run(GetPairingAddresses);
+                display = addresses.Count > 0 ? string.Join("   ", addresses) : "Tidak ada alamat Wi-Fi/LAN";
+            }
+            catch { display = "Alamat IP belum tersedia"; }
+            if (!IsLoaded) return;
+            await Dispatcher.InvokeAsync(() => AddressText.Text = display);
         }
 
         private static List<string> GetTailscaleAddresses()
@@ -1061,6 +1101,8 @@ namespace LaptopStatus
 
         private static readonly byte[] ScreenPasswordEntropy = Encoding.UTF8.GetBytes("LaptopStatus.ScreenAccessPassword.v1");
         private static readonly byte[] CloudflareTokenEntropy = Encoding.UTF8.GetBytes("LaptopStatus.CloudflareTunnelToken.v1");
+        private static readonly byte[] ScreenCertificateEntropy = Encoding.UTF8.GetBytes("LaptopStatus.ScreenServerCertificate.v1");
+        private static readonly byte[] ProtectedCertificateMarker = Encoding.ASCII.GetBytes("LSPFX1");
 
         private static byte[] ProtectForCurrentWindowsUser(byte[] plainBytes) => TransformWithDpapi(plainBytes, protect: true, ScreenPasswordEntropy);
         private static byte[] UnprotectForCurrentWindowsUser(byte[] protectedBytes) => TransformWithDpapi(protectedBytes, protect: false, ScreenPasswordEntropy);
@@ -1276,7 +1318,22 @@ namespace LaptopStatus
             Directory.CreateDirectory(dir);
             var path = Path.Combine(dir, "screen-server.pfx");
             if (File.Exists(path))
-                return new X509Certificate2(path, (string?)null, X509KeyStorageFlags.UserKeySet | X509KeyStorageFlags.Exportable);
+            {
+                var storedBytes = File.ReadAllBytes(path);
+                if (storedBytes.AsSpan().StartsWith(ProtectedCertificateMarker))
+                {
+                    var pfx = TransformWithDpapi(storedBytes[ProtectedCertificateMarker.Length..], protect: false, ScreenCertificateEntropy);
+                    return ImportScreenCertificate(pfx);
+                }
+                // Upgrade certificates saved by older releases as an unprotected PFX.
+                using var legacy = new X509Certificate2(storedBytes, (string?)null,
+                    X509KeyStorageFlags.UserKeySet | X509KeyStorageFlags.Exportable);
+                var migratedPfx = legacy.Export(X509ContentType.Pfx);
+                File.WriteAllBytes(path, ProtectScreenCertificate(migratedPfx));
+                var imported = ImportScreenCertificate(migratedPfx);
+                CryptographicOperations.ZeroMemory(storedBytes);
+                return imported;
+            }
 
             using var privateKey = ECDsa.Create(ECCurve.NamedCurves.nistP256);
             var request = new CertificateRequest($"CN={Environment.MachineName} Laptop Status", privateKey, HashAlgorithmName.SHA256);
@@ -1284,51 +1341,325 @@ namespace LaptopStatus
             request.CertificateExtensions.Add(new X509KeyUsageExtension(X509KeyUsageFlags.DigitalSignature, false));
             request.CertificateExtensions.Add(new X509SubjectKeyIdentifierExtension(request.PublicKey, false));
             using var certificate = request.CreateSelfSigned(DateTimeOffset.UtcNow.AddMinutes(-5), DateTimeOffset.UtcNow.AddYears(5));
-            File.WriteAllBytes(path, certificate.Export(X509ContentType.Pfx));
-            return new X509Certificate2(path, (string?)null, X509KeyStorageFlags.UserKeySet | X509KeyStorageFlags.Exportable);
+            var newPfx = certificate.Export(X509ContentType.Pfx);
+            File.WriteAllBytes(path, ProtectScreenCertificate(newPfx));
+            return ImportScreenCertificate(newPfx);
+        }
+
+        private static X509Certificate2 ImportScreenCertificate(byte[] pfx)
+        {
+            try { return new X509Certificate2(pfx, (string?)null, X509KeyStorageFlags.UserKeySet); }
+            finally { CryptographicOperations.ZeroMemory(pfx); }
+        }
+
+        private static byte[] ProtectScreenCertificate(byte[] pfx)
+        {
+            var protectedPfx = TransformWithDpapi(pfx, protect: true, ScreenCertificateEntropy);
+            return ProtectedCertificateMarker.Concat(protectedPfx).ToArray();
         }
 
         private WinForms.NotifyIcon CreateTrayIcon()
         {
-            var menu = new WinForms.ContextMenuStrip();
-            var open = menu.Items.Add("Buka Status Perangkat");
-            open.Click += (_, _) => Dispatcher.BeginInvoke(() => { Show(); WindowState = WindowState.Normal; Activate(); });
-            var exit = menu.Items.Add("Keluar");
-            exit.Click += (_, _) => Dispatcher.BeginInvoke(() => { _allowExit = true; Close(); });
+            _legacyTrayMenu = new WinForms.ContextMenuStrip();
+            _legacyTrayMenu.Items.Add("Buka Status Perangkat", null, (_, _) => Dispatcher.BeginInvoke(new Action(() => { Show(); WindowState = WindowState.Normal; Activate(); })));
+            _trayRetryNewMenuItem = new WinForms.ToolStripMenuItem("Gunakan menu tray sederhana")
+            {
+                CheckOnClick = true,
+                Checked = false,
+                Visible = true
+            };
+            _trayRetryNewMenuItem.Click += (_, _) =>
+            {
+                var useFallback = _trayRetryNewMenuItem.Checked;
+                Dispatcher.BeginInvoke(new Action(() => SetTrayFallback(useFallback, retryNewTray: !useFallback)));
+            };
+            _legacyTrayMenu.Items.Add(_trayRetryNewMenuItem);
+            _legacyTrayMenu.Items.Add(new WinForms.ToolStripSeparator());
+            _legacyTrayMenu.Items.Add("Keluar", null, (_, _) => Dispatcher.BeginInvoke(new Action(ExitApplication)));
             var icon = new WinForms.NotifyIcon
             {
                 Icon = _applicationIcon ?? System.Drawing.SystemIcons.Application,
                 Text = "Status Perangkat — layanan aktif",
-                ContextMenuStrip = menu,
+                ContextMenuStrip = null,
                 Visible = true
+            };
+            icon.MouseClick += (_, args) =>
+            {
+                if (args.Button is not (WinForms.MouseButtons.Left or WinForms.MouseButtons.Right)) return;
+                Dispatcher.BeginInvoke(new Action(() =>
+                {
+                    if (_trayFallbackEnabled)
+                    {
+                        if (args.Button == WinForms.MouseButtons.Left)
+                            _legacyTrayMenu?.Show(WinForms.Cursor.Position);
+                        return;
+                    }
+                    ToggleTrayFlyout();
+                }));
             };
             icon.DoubleClick += (_, _) => Dispatcher.BeginInvoke(() => { Show(); WindowState = WindowState.Normal; Activate(); });
             return icon;
         }
 
-        private void RecordWindowsHistory(string message)
+        private void SetTrayFallback(bool enabled, bool retryNewTray)
+        {
+            _trayFallbackEnabled = enabled;
+            _trayIcon.ContextMenuStrip = enabled ? _legacyTrayMenu : null;
+            if (_trayRetryNewMenuItem is not null)
+            {
+                _trayRetryNewMenuItem.Checked = enabled;
+                _trayRetryNewMenuItem.Text = enabled ? "Coba tray baru lagi" : "Gunakan menu tray sederhana";
+            }
+            if (enabled)
+            {
+                try { _trayFlyout?.Close(); } catch { }
+                _trayFlyout = null;
+                return;
+            }
+            if (retryNewTray) ToggleTrayFlyout();
+        }
+
+        private void ToggleTrayFlyout()
+        {
+            if (_trayFallbackEnabled) return;
+            try
+            {
+                if (_trayFlyout is { IsVisible: true })
+                {
+                    _trayFlyout.CloseAnimated();
+                    return;
+                }
+                _trayFlyout = new TrayFlyoutWindow(
+                    () => Dispatcher.BeginInvoke(new Action(() => { Show(); WindowState = WindowState.Normal; Activate(); })),
+                    () => Dispatcher.BeginInvoke(new Action(ExitApplication)),
+                    () => Dispatcher.BeginInvoke(new Action(() => SetTrayFallback(enabled: true, retryNewTray: false))));
+                _trayFlyout.Closed += (_, _) => _trayFlyout = null;
+                UpdateTrayFlyout();
+                _trayFlyout.ShowAt(_trayIcon, MotionAnimationsEnabled);
+                if (!_trayFlyout.IsVisible) throw new InvalidOperationException("Panel tray baru tidak tampil.");
+            }
+            catch (Exception ex)
+            {
+                try { _trayFlyout?.Close(); } catch { }
+                _trayFlyout = null;
+                SetTrayFallback(enabled: true, retryNewTray: false);
+                RecordWindowsHistory($"Tray baru gagal dibuka; menu tray sederhana diaktifkan otomatis. {ex.Message}");
+                _trayIcon.ShowBalloonTip(3500, "Status Perangkat", "Tray baru bermasalah. Menu tray sederhana aktif; klik kanan ikon untuk membuka aplikasi atau keluar.", WinForms.ToolTipIcon.Warning);
+            }
+        }
+
+        private void ExitApplication_Click(object sender, RoutedEventArgs e) => ExitApplication();
+
+        private void ExitApplication()
+        {
+            if (MessageBox.Show(this,
+                    "Tutup aplikasi LaptopStatus? Koneksi Android dan pemantauan di laptop akan berhenti.",
+                    "Keluar dari LaptopStatus",
+                    MessageBoxButton.YesNo,
+                    MessageBoxImage.Warning) != MessageBoxResult.Yes) return;
+            _allowExit = true;
+            Close();
+            Application.Current.Shutdown();
+        }
+
+        private void UpdateTrayFlyout()
+        {
+            if (!_trayReady) return;
+            ScheduledPower? schedule;
+            lock (_scheduledPowerGate) schedule = _scheduledPower;
+            _trayIcon.Text = _trayAndroidState switch
+            {
+                "connected" => "Status Perangkat — Android terhubung",
+                "rejected" => "Status Perangkat — koneksi ditolak",
+                _ => schedule is null ? "Status Perangkat — layanan aktif" : "Status Perangkat — shutdown terjadwal"
+            };
+            _trayIconAnimator.SetState(_trayAndroidState, schedule is not null);
+            DateTimeOffset? scheduledAt = null;
+            if (schedule is not null && schedule.AtUtc > 0)
+            {
+                try { scheduledAt = DateTimeOffset.FromUnixTimeMilliseconds(schedule.AtUtc); }
+                catch (ArgumentOutOfRangeException) { }
+            }
+            _trayFlyout?.UpdateState(_trayAndroidState, schedule?.Action ?? "", scheduledAt, _cpu, _ram, _battery);
+        }
+
+        private void ShowTrayToast(string title, string message, string kind = "info", int durationMilliseconds = 5000)
         {
             if (!Dispatcher.CheckAccess())
             {
-                _ = Dispatcher.BeginInvoke(() => RecordWindowsHistory(message));
+                _ = Dispatcher.BeginInvoke(new Action(() => ShowTrayToast(title, message, kind, durationMilliseconds)));
                 return;
             }
-            _windowsHistory.Enqueue($"{DateTime.Now:T} — {message}");
+            if (_trayToasts.Count >= 3)
+            {
+                var oldestToast = _trayToasts[0];
+                _trayToasts.RemoveAt(0);
+                oldestToast.Dismiss();
+            }
+            var toast = new TrayToastWindow(title, message, kind, durationMilliseconds, _trayToasts.Count, _trayToasts,
+                () => Dispatcher.BeginInvoke(new Action(() =>
+                {
+                    Show();
+                    WindowState = WindowState.Normal;
+                    Activate();
+                    NavigateToPageByKey("history");
+                })), MotionAnimationsEnabled);
+            _trayToasts.Add(toast);
+            toast.Show();
+        }
+
+        private void LoadWindowsHistory()
+        {
+            try
+            {
+                if (File.Exists(_windowsHistoryPath))
+                {
+                    var saved = JsonSerializer.Deserialize<List<WindowsHistoryEntry>>(File.ReadAllText(_windowsHistoryPath));
+                    foreach (var entry in (saved ?? new()).TakeLast(20)) _windowsHistory.Enqueue(entry);
+                }
+                else if (File.Exists(_legacyWindowsHistoryPath))
+                {
+                    foreach (var line in File.ReadLines(_legacyWindowsHistoryPath).Where(line => !string.IsNullOrWhiteSpace(line)).TakeLast(20))
+                    {
+                        var split = line.Split(" — ", 2, StringSplitOptions.None);
+                        var time = split.Length == 2 && DateTimeOffset.TryParse(split[0], out var parsed)
+                            ? parsed.ToUnixTimeMilliseconds()
+                            : DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+                        var message = split.Length == 2 ? split[1] : line;
+                        _windowsHistory.Enqueue(new WindowsHistoryEntry(time, message, "Aktivitas tersimpan sebelumnya", GetHistoryCategory(message)));
+                    }
+                }
+            }
+            catch { }
+            RenderWindowsHistory();
+        }
+
+        private void RecordWindowsHistory(string message)
+        {
+            var category = GetHistoryCategory(message);
+            var subtitle = category switch
+            {
+                "connection" => "Koneksi perangkat",
+                "battery" => "Status baterai laptop",
+                _ => "Aktivitas Windows"
+            };
+            RecordWindowsHistory(message, subtitle, category);
+        }
+
+        private void RecordWindowsHistory(string title, string subtitle, string category)
+        {
+            if (!Dispatcher.CheckAccess())
+            {
+                _ = Dispatcher.BeginInvoke(() => RecordWindowsHistory(title, subtitle, category));
+                return;
+            }
+            var entry = new WindowsHistoryEntry(DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(), title, subtitle, category);
+            _windowsHistory.Enqueue(entry);
             while (_windowsHistory.Count > 20) _windowsHistory.Dequeue();
-            WindowsHistoryText.Text = string.Join(Environment.NewLine + Environment.NewLine, _windowsHistory.Reverse());
+            try
+            {
+                Directory.CreateDirectory(Path.GetDirectoryName(_windowsHistoryPath)!);
+                var temporaryPath = _windowsHistoryPath + ".tmp";
+                File.WriteAllText(temporaryPath, JsonSerializer.Serialize(_windowsHistory.ToArray()), Encoding.UTF8);
+                File.Move(temporaryPath, _windowsHistoryPath, overwrite: true);
+            }
+            catch { }
+            RenderWindowsHistory();
+        }
+
+        private static string GetHistoryCategory(string text)
+        {
+            if (text.Contains("baterai", StringComparison.OrdinalIgnoreCase) || text.Contains("battery", StringComparison.OrdinalIgnoreCase)) return "battery";
+            if (text.Contains("sambung", StringComparison.OrdinalIgnoreCase) || text.Contains("hubung", StringComparison.OrdinalIgnoreCase)
+                || text.Contains("koneksi", StringComparison.OrdinalIgnoreCase) || text.Contains("pairing", StringComparison.OrdinalIgnoreCase)
+                || text.Contains("offline", StringComparison.OrdinalIgnoreCase)) return "connection";
+            return "activity";
+        }
+
+        private void WindowsHistoryFilter_Click(object sender, RoutedEventArgs e)
+        {
+            if (sender is not Button { Tag: string filter }) return;
+            _historyFilter = filter;
+            RenderWindowsHistory();
+        }
+
+        private void RenderWindowsHistory()
+        {
+            if (WindowsHistoryList is null) return;
+            WindowsHistoryList.Children.Clear();
+            var all = _windowsHistory.Reverse().ToArray();
+            var selected = all.Where(entry => _historyFilter == "all" || entry.Category == _historyFilter).ToArray();
+            HistoryFilterAllButton.Background = _historyFilter == "all" ? new SolidColorBrush(Color.FromArgb(38, 114, 228, 191)) : Brushes.Transparent;
+            HistoryFilterAllButton.BorderBrush = _historyFilter == "all" ? new SolidColorBrush(Color.FromArgb(61, 114, 228, 191)) : Brushes.Transparent;
+            HistoryFilterAllButton.Foreground = _historyFilter == "all" ? (Brush)FindResource("TextBrush") : (Brush)FindResource("TextDimBrush");
+            HistoryFilterConnectionButton.Background = _historyFilter == "connection" ? new SolidColorBrush(Color.FromArgb(38, 114, 228, 191)) : Brushes.Transparent;
+            HistoryFilterConnectionButton.BorderBrush = _historyFilter == "connection" ? new SolidColorBrush(Color.FromArgb(61, 114, 228, 191)) : Brushes.Transparent;
+            HistoryFilterConnectionButton.Foreground = _historyFilter == "connection" ? (Brush)FindResource("TextBrush") : (Brush)FindResource("TextDimBrush");
+            HistoryFilterBatteryButton.Background = _historyFilter == "battery" ? new SolidColorBrush(Color.FromArgb(38, 114, 228, 191)) : Brushes.Transparent;
+            HistoryFilterBatteryButton.BorderBrush = _historyFilter == "battery" ? new SolidColorBrush(Color.FromArgb(61, 114, 228, 191)) : Brushes.Transparent;
+            HistoryFilterBatteryButton.Foreground = _historyFilter == "battery" ? (Brush)FindResource("TextBrush") : (Brush)FindResource("TextDimBrush");
+            WindowsHistorySummaryText.Text = $"{selected.Length} aktivitas ditampilkan • menyimpan {all.Length} dari 20 aktivitas terbaru.";
+            if (selected.Length == 0)
+            {
+                var emptyMessage = _historyFilter switch
+                {
+                    "connection" => "Belum ada riwayat koneksi Android.",
+                    "battery" => "Belum ada riwayat baterai laptop.",
+                    _ => "Belum ada aktivitas tercatat. Aktivitas Windows dan koneksi Android akan muncul di sini."
+                };
+                WindowsHistoryList.Children.Add(new TextBlock { Text = emptyMessage, Foreground = (Brush)FindResource("TextDimBrush"), FontSize = 12, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(4, 8, 4, 8) });
+                return;
+            }
+
+            foreach (var entry in selected)
+            {
+                DateTimeOffset localTime;
+                try { localTime = DateTimeOffset.FromUnixTimeMilliseconds(entry.AtUtc).ToLocalTime(); }
+                catch { localTime = DateTimeOffset.Now; }
+                var row = new Grid { Margin = new Thickness(0, 3, 0, 5) };
+                row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(52) });
+                row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(22) });
+                row.ColumnDefinitions.Add(new ColumnDefinition());
+                var time = new TextBlock { Text = localTime.ToString("HH:mm"), Foreground = (Brush)FindResource("TextDimBrush"), FontSize = 10, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(0, 12, 4, 0), TextAlignment = TextAlignment.Right };
+                Grid.SetColumn(time, 0);
+                row.Children.Add(time);
+                var dotColor = entry.Category switch
+                {
+                    "battery" => Color.FromRgb(242, 195, 107),
+                    "connection" when entry.Title.Contains("putus", StringComparison.OrdinalIgnoreCase) || entry.Title.Contains("ditolak", StringComparison.OrdinalIgnoreCase) => Color.FromRgb(232, 93, 106),
+                    _ => Color.FromRgb(114, 228, 191)
+                };
+                var dot = new Ellipse { Width = 11, Height = 11, Fill = new SolidColorBrush(dotColor), Stroke = (Brush)FindResource("PanelBrush"), StrokeThickness = 2, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(4, 13, 4, 0) };
+                Grid.SetColumn(dot, 1);
+                row.Children.Add(dot);
+                var content = new StackPanel();
+                content.Children.Add(new TextBlock { Text = entry.Title, Foreground = (Brush)FindResource("TextBrush"), FontSize = 12, FontWeight = FontWeights.SemiBold, TextWrapping = TextWrapping.Wrap });
+                var subtitle = string.IsNullOrWhiteSpace(entry.Subtitle) ? localTime.ToString("dd MMM yyyy") : $"{entry.Subtitle} • {localTime:dd MMM yyyy}";
+                content.Children.Add(new TextBlock { Text = subtitle, Foreground = (Brush)FindResource("TextDimBrush"), FontSize = 10, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 3, 0, 0) });
+                var card = new Border { Background = (Brush)FindResource("Panel2Brush"), BorderBrush = (Brush)FindResource("GlassLineBrush"), BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(12), Padding = new Thickness(12, 9, 12, 9), Child = content };
+                Grid.SetColumn(card, 2);
+                row.Children.Add(card);
+                WindowsHistoryList.Children.Add(row);
+            }
         }
 
         private void ClearWindowsHistory_Click(object sender, RoutedEventArgs e)
         {
             if (_windowsHistory.Count == 0)
             {
-                WindowsHistoryText.Text = "Belum ada aktivitas yang tercatat.";
+                RenderWindowsHistory();
                 return;
             }
             var result = MessageBox.Show(this, "Hapus semua riwayat aktivitas pada aplikasi Windows?", "Hapus riwayat", MessageBoxButton.YesNo, MessageBoxImage.Question, MessageBoxResult.No);
             if (result != MessageBoxResult.Yes) return;
             _windowsHistory.Clear();
-            WindowsHistoryText.Text = "Belum ada aktivitas yang tercatat.";
+            try
+            {
+                if (File.Exists(_windowsHistoryPath)) File.Delete(_windowsHistoryPath);
+                if (File.Exists(_legacyWindowsHistoryPath)) File.Delete(_legacyWindowsHistoryPath);
+            }
+            catch { }
+            RenderWindowsHistory();
         }
 
         private void RefreshStats()
@@ -1344,8 +1675,7 @@ namespace LaptopStatus
             catch { _ram = 0; }
             AnimateMetricValue(RamValue, _ram, "%");
             AnimateProgress(RamUsageBar, _ram);
-            try { _hardwareSnapshot = _hardwareTelemetry.Read(); } catch { }
-            UpdateHardwarePresentation();
+            _ = RefreshHardwareTelemetryAsync();
             try
             {
                 var charge = System.Windows.Forms.SystemInformation.PowerStatus.BatteryLifePercent;
@@ -1360,10 +1690,58 @@ namespace LaptopStatus
                 BatteryValue.Text = "N/A";
             }
             AnimateProgress(BatteryUsageBar, _battery ?? 0);
+            if (_battery is < 20 && !_batteryLowHistoryRecorded)
+            {
+                _batteryLowHistoryRecorded = true;
+                RecordWindowsHistory("Baterai laptop di bawah 20%", $"Daya tersisa {_battery}%.", "battery");
+            }
+            else if (_battery is >= 25)
+                _batteryLowHistoryRecorded = false;
+
+            var lastAndroidStatus = Interlocked.Read(ref _lastAndroidStatusUtcMs);
+            if (_trayAndroidState == "connected" && lastAndroidStatus > 0
+                && DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() - lastAndroidStatus >= 45_000)
+            {
+                _trayAndroidState = "none";
+                RecordWindowsHistory("Android terputus", "Tidak ada pembaruan status dari Android selama 45 detik.", "connection");
+            }
+            UpdateTrayFlyout();
             AddHistoryValue(_cpuHistory, _cpu);
             AddHistoryValue(_ramHistory, _ram);
             AddHistoryValue(_gpuHistory, _hardwareSnapshot.GpuUsagePercent is >= 0 and <= 100 ? _hardwareSnapshot.GpuUsagePercent.Value : double.NaN);
             if (_showingPerformanceView) UpdatePerformanceView();
+        }
+
+        private async Task RefreshHardwareTelemetryAsync()
+        {
+            if (DateTime.UtcNow - _lastHardwareTelemetryReadUtc < TimeSpan.FromSeconds(10)) return;
+            _lastHardwareTelemetryReadUtc = DateTime.UtcNow;
+            if (Interlocked.Exchange(ref _hardwareReadInProgress, 1) != 0) return;
+            try
+            {
+                var telemetry = await _hardwareTelemetryTask.ConfigureAwait(false);
+                var snapshot = await Task.Run(telemetry.Read).ConfigureAwait(false);
+                if (_stop.IsCancellationRequested) return;
+                await Dispatcher.InvokeAsync(() =>
+                {
+                    _hardwareSnapshot = snapshot;
+                    UpdateHardwarePresentation();
+                });
+            }
+            catch { }
+            finally { Interlocked.Exchange(ref _hardwareReadInProgress, 0); }
+        }
+
+        private async Task DisposeHardwareTelemetryAsync()
+        {
+            try
+            {
+                var telemetry = await _hardwareTelemetryTask.ConfigureAwait(false);
+                while (Volatile.Read(ref _hardwareReadInProgress) != 0)
+                    await Task.Delay(50).ConfigureAwait(false);
+                telemetry.Dispose();
+            }
+            catch { }
         }
 
         private static void AddHistoryValue(Queue<double> history, double value)
@@ -1498,6 +1876,7 @@ namespace LaptopStatus
             if (_loadingAppearanceSettings) return;
             _motionAnimationsEnabled = MotionAnimationsToggle.IsChecked == true;
             _classicThemeEnabled = ClassicThemeToggle.IsChecked == true;
+            _trayIconAnimator.SetMotionEnabled(MotionAnimationsEnabled);
             SaveAppearanceSettings();
             ApplyClassicTheme();
         }
@@ -2281,6 +2660,7 @@ namespace LaptopStatus
         }
 
         private sealed record ScheduledPower(string Action, long AtUtc, string Message);
+        private sealed record WindowsHistoryEntry(long AtUtc, string Title, string Subtitle, string Category);
 
         private static readonly ConcurrentDictionary<string, string> ProcessIconBase64Cache = new(StringComparer.OrdinalIgnoreCase);
 
@@ -4028,7 +4408,7 @@ namespace LaptopStatus
                 catch
                 {
                     EnsureScheduledPowerResumeStartup();
-                    ConnectionInfo.Text = "Jadwal tersimpan. Windows membatasi Task Scheduler, jadi Laptop Status akan memulihkannya saat akun ini masuk kembali.";
+                    SetConnectionInfo("Jadwal tersimpan. Windows membatasi Task Scheduler, jadi Laptop Status akan memulihkannya saat akun ini masuk kembali.");
                 }
             }
             catch (Exception ex)
@@ -4040,8 +4420,14 @@ namespace LaptopStatus
                     DeleteScheduledPowerResumeStartup();
                 }
                 else
-                    ConnectionInfo.Text = "Jadwal tersimpan, tetapi pemulihan saat login gagal: " + ex.Message;
+                    SetConnectionInfo("Jadwal tersimpan, tetapi pemulihan saat login gagal: " + ex.Message);
             }
+        }
+
+        private void SetConnectionInfo(string message)
+        {
+            if (Dispatcher.CheckAccess()) ConnectionInfo.Text = message;
+            else _ = Dispatcher.BeginInvoke(new Action(() => ConnectionInfo.Text = message));
         }
 
         private void CancelScheduledPower()
@@ -4245,13 +4631,9 @@ namespace LaptopStatus
                 notice += $" Pesan: {customMessage}";
             }
             var title = schedule.Action == "shutdown" ? "Shutdown terjadwal aktif" : "Jadwal daya Windows aktif";
-            _trayIcon.ShowBalloonTip(6000, title, notice, WinForms.ToolTipIcon.Info);
-            if (_powerScheduleNotificationWindow is { IsVisible: true })
-                _powerScheduleNotificationWindow.Close();
-            _powerScheduleNotificationWindow = new PowerScheduleNotificationWindow(title, notice);
-            _powerScheduleNotificationWindow.Closed += (_, _) => _powerScheduleNotificationWindow = null;
-            _powerScheduleNotificationWindow.Show();
-            _powerScheduleNotificationWindow.StartDismissTimer();
+            UpdateTrayFlyout();
+            _trayIconAnimator.Pulse();
+            ShowTrayToast(title, notice, "time", 7000);
         }
 
         private void ShowExpiredScheduledPowerNotice(ScheduledPower schedule)
@@ -4264,30 +4646,47 @@ namespace LaptopStatus
                 _ => "Jadwal daya"
             };
             var localTime = DateTimeOffset.FromUnixTimeMilliseconds(schedule.AtUtc).ToLocalTime().ToString("dd MMM yyyy, HH:mm");
-            _trayIcon.ShowBalloonTip(
-                7000,
-                "Jadwal terlewat",
-                $"{actionName} pukul {localTime} tidak dijalankan karena laptop sedang mati. Jadwal telah dibatalkan.",
-                WinForms.ToolTipIcon.Warning);
+            UpdateTrayFlyout();
+            _trayIconAnimator.Pulse(warning: true);
+            ShowTrayToast("Jadwal terlewat", $"{actionName} pukul {localTime} tidak dijalankan karena laptop sedang mati. Jadwal telah dibatalkan.", "warn", 8000);
         }
 
         private void RegisterConnectionSound(bool success, string connectionKey)
         {
-            if (!_connectionChimesEnabled) return;
             var key = (success ? "success:" : "failure:") + (string.IsNullOrWhiteSpace(connectionKey) ? "unknown" : connectionKey);
             var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
-            if (_connectionChimeLastPlayed.TryGetValue(key, out var lastPlayed) && now - lastPlayed < 20_000) return;
+            if (success)
+            {
+                var previousStatus = Interlocked.Exchange(ref _lastAndroidStatusUtcMs, now);
+                var newSession = _trayAndroidState != "connected" || previousStatus == 0 || now - previousStatus >= 45_000;
+                _trayAndroidState = "connected";
+                _trayRejectedStateTimer.Stop();
+                UpdateTrayFlyout();
+                if (!newSession) return; // Polling status rutin bukan koneksi baru.
+                RecordWindowsHistory("Terhubung ke laptop", $"Android tersambung melalui {connectionKey}.", "connection");
+            }
+            else
+            {
+                if (_connectionChimeLastPlayed.TryGetValue(key, out var lastPlayed) && now - lastPlayed < 60_000) return;
+                _trayAndroidState = "rejected";
+                _trayRejectedStateTimer.Stop();
+                _trayRejectedStateTimer.Start();
+                UpdateTrayFlyout();
+                RecordWindowsHistory("Koneksi Android ditolak", "Pairing atau token koneksi tidak valid.", "connection");
+            }
+
             _connectionChimeLastPlayed[key] = now;
-            _trayIcon.ShowBalloonTip(
-                3500,
-                success ? "Android terhubung" : "Koneksi Android ditolak",
-                success ? "Laptop Status menerima koneksi aman dari Android." : "Windows menerima permintaan koneksi, tetapi pairing atau tokennya ditolak.",
-                success ? WinForms.ToolTipIcon.Info : WinForms.ToolTipIcon.Warning);
             if (_connectionChimeLastPlayed.Count > 48)
             {
                 foreach (var entry in _connectionChimeLastPlayed.Where(item => now - item.Value > 300_000).ToArray())
                     _connectionChimeLastPlayed.TryRemove(entry.Key, out _);
             }
+            _trayIconAnimator.Pulse(warning: !success);
+            ShowTrayToast(
+                success ? "Android terhubung" : "Koneksi Android ditolak",
+                success ? "Laptop Status menerima koneksi aman dari Android." : "Windows menerima permintaan koneksi, tetapi pairing atau tokennya ditolak.",
+                success ? "ok" : "warn", success ? 4500 : 5500);
+            if (!_connectionChimesEnabled) return;
 
             var fileName = success ? "connection-success.mp3" : "connection-failed.mp3";
             var path = Path.Combine(AppContext.BaseDirectory, "Assets", "Sounds", fileName);
@@ -4324,7 +4723,7 @@ namespace LaptopStatus
             {
                 e.Cancel = true;
                 Hide();
-                _trayIcon.ShowBalloonTip(1800, "Status Perangkat", "Layanan tetap berjalan di system tray. Pilih Keluar dari menu ikon tray untuk menutupnya.", WinForms.ToolTipIcon.Info);
+                ShowTrayToast("Status Perangkat", "Layanan tetap berjalan di system tray. Klik ikon tray, lalu pilih Keluar untuk menutupnya.", "info", 5500);
                 return;
             }
             StopScreenSession();
@@ -4341,11 +4740,18 @@ namespace LaptopStatus
             _processKillArmTimer?.Stop();
             _stop.Cancel();
             StopCloudflareTunnelRuntime();
-            _listener.Stop(); _screenListener.Stop(); _timer.Stop(); _screenSessionTimer.Stop(); _cpuCounter.Dispose(); _hardwareTelemetry.Dispose(); _stop.Dispose();
+            _listener.Stop(); _screenListener.Stop(); _timer.Stop(); _screenSessionTimer.Stop(); _cpuCounter.Dispose(); _stop.Dispose();
+            _ = DisposeHardwareTelemetryAsync();
             _screenCertificate.Dispose();
+            _trayRejectedStateTimer.Stop();
             foreach (var chime in _activeConnectionChimes.ToArray()) { try { chime.Close(); } catch { } }
             _activeConnectionChimes.Clear();
+            _trayFlyout?.Close();
+            foreach (var toast in _trayToasts.ToArray()) toast.Close();
+            _trayToasts.Clear();
+            _trayIconAnimator.Dispose();
             _trayIcon.Visible = false; _trayIcon.Dispose();
+            _legacyTrayMenu?.Dispose();
             _applicationIcon?.Dispose();
             base.OnClosed(e);
         }

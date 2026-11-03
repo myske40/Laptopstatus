@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import hashlib
+import ipaddress
 import json
 import os
 import platform
@@ -13,6 +14,8 @@ import ssl
 import subprocess
 import threading
 import time
+from collections import deque
+from dataclasses import dataclass, field
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlsplit
@@ -24,8 +27,94 @@ TOKEN_FILE = APP_DIR / "pairing-token"
 SCREEN_PASSWORD_FILE = APP_DIR / "screen-password"
 DEVICE_ID_FILE = APP_DIR / "device-id"
 PORT = int(os.environ.get("LAPTOPSTATUS_PORT", "8765"))
-LOCK = threading.Lock()
-SHELLS: dict[str, tuple[subprocess.Popen, list[str], float]] = {}
+LOCK = threading.RLock()
+SHELLS: dict[str, "ShellSession"] = {}
+MAX_SHELL_SESSIONS = 4
+MAX_SHELL_OUTPUT = 65536
+SHELL_IDLE_SECONDS = 900
+MAX_JSON_BODY = 16 * 1024
+MAX_AUTH_FAILURES_PER_MINUTE = 20
+AUTH_FAILURES: dict[str, deque[float]] = {}
+AUTH_LOCK = threading.Lock()
+_cpu_sample: tuple[int, int] | None = None
+
+
+def is_allowed_peer(client_ip: str) -> bool:
+    try:
+        address = ipaddress.ip_address(client_ip)
+        tailscale_peer = address.version == 4 and address in ipaddress.ip_network("100.64.0.0/10")
+        return address.is_loopback or address.is_private or tailscale_peer
+    except (ValueError, TypeError):
+        return False
+
+
+@dataclass
+class ShellSession:
+    process: subprocess.Popen
+    created_at: float = field(default_factory=time.monotonic)
+    last_activity: float = field(default_factory=time.monotonic)
+    output: deque[str] = field(default_factory=deque)
+    output_size: int = 0
+    output_start: int = 0
+    output_lock: threading.Lock = field(default_factory=threading.Lock)
+
+    def append(self, line: str) -> None:
+        text = line
+        with self.output_lock:
+            self.output.append(text)
+            self.output_size += len(text)
+            while self.output_size > MAX_SHELL_OUTPUT and self.output:
+                excess = self.output_size - MAX_SHELL_OUTPUT
+                first = self.output[0]
+                if len(first) <= excess:
+                    self.output.popleft()
+                    self.output_size -= len(first)
+                    self.output_start += len(first)
+                else:
+                    self.output[0] = first[excess:]
+                    self.output_size -= excess
+                    self.output_start += excess
+
+    def read_after(self, cursor: int) -> tuple[str, int, bool]:
+        with self.output_lock:
+            end = self.output_start + self.output_size
+            actual_cursor = min(max(cursor, self.output_start), end)
+            combined = "".join(self.output)
+            text = combined[actual_cursor - self.output_start:]
+            self.last_activity = time.monotonic()
+            return text, actual_cursor + len(text), cursor < self.output_start
+
+
+def stop_shell_process(session: ShellSession) -> None:
+    try:
+        os.killpg(session.process.pid, signal.SIGTERM)
+        session.process.wait(timeout=2)
+    except subprocess.TimeoutExpired:
+        try:
+            os.killpg(session.process.pid, signal.SIGKILL)
+        except OSError:
+            pass
+        try:
+            session.process.wait(timeout=2)
+        except subprocess.TimeoutExpired:
+            pass
+    except OSError:
+        if session.process.poll() is None:
+            try:
+                session.process.terminate()
+                session.process.wait(timeout=2)
+            except (OSError, subprocess.TimeoutExpired):
+                pass
+
+
+def cleanup_shells() -> None:
+    now = time.monotonic()
+    with LOCK:
+        expired_ids = [session_id for session_id, session in SHELLS.items()
+                       if now - session.last_activity > SHELL_IDLE_SECONDS]
+        expired = [SHELLS.pop(session_id) for session_id in expired_ids]
+    for session in expired:
+        stop_shell_process(session)
 
 
 def run(*args: str) -> str:
@@ -35,25 +124,40 @@ def run(*args: str) -> str:
         return ""
 
 
+def write_private_file(path: Path, value: str) -> None:
+    previous_umask = os.umask(0o077)
+    try:
+        path.write_text(value, encoding="utf-8")
+    finally:
+        os.umask(previous_umask)
+    os.chmod(path, 0o600)
+
+
 def initialize() -> None:
     APP_DIR.mkdir(parents=True, exist_ok=True)
     os.chmod(APP_DIR, 0o700)
     if not TOKEN_FILE.exists():
-        TOKEN_FILE.write_text(secrets.token_urlsafe(32), encoding="utf-8")
-        os.chmod(TOKEN_FILE, 0o600)
+        write_private_file(TOKEN_FILE, secrets.token_urlsafe(32))
+    os.chmod(TOKEN_FILE, 0o600)
     if not SCREEN_PASSWORD_FILE.exists():
-        SCREEN_PASSWORD_FILE.write_text(secrets.token_urlsafe(16), encoding="utf-8")
-        os.chmod(SCREEN_PASSWORD_FILE, 0o600)
+        write_private_file(SCREEN_PASSWORD_FILE, secrets.token_urlsafe(16))
+    os.chmod(SCREEN_PASSWORD_FILE, 0o600)
     if not DEVICE_ID_FILE.exists():
-        DEVICE_ID_FILE.write_text(secrets.token_hex(16), encoding="utf-8")
-        os.chmod(DEVICE_ID_FILE, 0o600)
+        write_private_file(DEVICE_ID_FILE, secrets.token_hex(16))
+    os.chmod(DEVICE_ID_FILE, 0o600)
     if not CERT.exists() or not KEYFILE.exists():
-        subprocess.run([
-            "openssl", "req", "-x509", "-newkey", "rsa:3072", "-sha256", "-nodes",
-            "-keyout", str(KEYFILE), "-out", str(CERT), "-days", "3650",
-            "-subj", "/CN=LaptopStatus Linux",
-        ], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        previous_umask = os.umask(0o077)
+        try:
+            subprocess.run([
+                "openssl", "req", "-x509", "-newkey", "ec", "-pkeyopt", "ec_paramgen_curve:prime256v1", "-sha256", "-nodes",
+                "-keyout", str(KEYFILE), "-out", str(CERT), "-days", "3650",
+                "-subj", "/CN=LaptopStatus Linux",
+            ], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        finally:
+            os.umask(previous_umask)
+    if KEYFILE.exists():
         os.chmod(KEYFILE, 0o600)
+    if CERT.exists():
         os.chmod(CERT, 0o644)
 
 
@@ -71,14 +175,17 @@ def battery() -> tuple[int | None, bool | None]:
 
 
 def cpu_percent() -> float:
+    global _cpu_sample
     def sample() -> tuple[int, int]:
         fields = Path("/proc/stat").read_text().splitlines()[0].split()[1:]
         values = [int(value) for value in fields]
         return sum(values), values[3] + (values[4] if len(values) > 4 else 0)
-    first = sample()
-    time.sleep(0.08)
-    second = sample()
-    total, idle = second[0] - first[0], second[1] - first[1]
+    current = sample()
+    previous = _cpu_sample
+    _cpu_sample = current
+    if previous is None:
+        return 0.0
+    total, idle = current[0] - previous[0], current[1] - previous[1]
     return round(100 * (total - idle) / total, 1) if total > 0 else 0.0
 
 
@@ -133,10 +240,10 @@ def process_list() -> list[dict]:
         try:
             stat = (entry / "stat").read_text()
             name = stat[stat.index("(") + 1:stat.rindex(")")]
-            status = (entry / "status").read_text()
-            rss_kb = next((int(line.split()[1]) for line in status.splitlines() if line.startswith("VmRSS:")), 0)
+            statm = (entry / "statm").read_text().split()
+            rss_bytes = int(statm[1]) * os.sysconf("SC_PAGE_SIZE") if len(statm) > 1 else 0
             pid = int(entry.name)
-            rows.append({"pid": pid, "name": name, "workingSetBytes": rss_kb * 1024,
+            rows.append({"pid": pid, "name": name, "workingSetBytes": rss_bytes,
                          "responding": True, "canTerminate": pid != os.getpid(),
                          "terminationNote": "" if pid != os.getpid() else "LaptopStatus sedang berjalan"})
         except (OSError, ValueError, IndexError):
@@ -145,7 +252,12 @@ def process_list() -> list[dict]:
 
 
 class Handler(BaseHTTPRequestHandler):
-    server_version = "LaptopStatusLinux/0.1"
+    server_version = "LaptopStatusLinux"
+    sys_version = ""
+
+    def setup(self) -> None:
+        super().setup()
+        self.connection.settimeout(10)
 
     def reply(self, code: int, value: dict) -> None:
         body = json.dumps(value, separators=(",", ":")).encode()
@@ -157,9 +269,59 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(body)
 
     def authorized(self) -> bool:
+        client_ip = self.client_address[0]
+        if not is_allowed_peer(client_ip):
+            return False
+        now = time.monotonic()
+        with AUTH_LOCK:
+            attempts = AUTH_FAILURES.get(client_ip)
+            if attempts is None:
+                if len(AUTH_FAILURES) >= 4096:
+                    AUTH_FAILURES.pop(next(iter(AUTH_FAILURES)))
+                attempts = AUTH_FAILURES.setdefault(client_ip, deque())
+            while attempts and now - attempts[0] >= 60:
+                attempts.popleft()
+            if len(attempts) >= MAX_AUTH_FAILURES_PER_MINUTE:
+                return False
         supplied = self.headers.get("Authorization", "")
         expected = "Bearer " + TOKEN_FILE.read_text().strip()
-        return secrets.compare_digest(supplied, expected)
+        valid = secrets.compare_digest(supplied, expected)
+        with AUTH_LOCK:
+            if valid:
+                AUTH_FAILURES.pop(client_ip, None)
+            else:
+                attempts = AUTH_FAILURES.get(client_ip)
+                if attempts is None:
+                    if len(AUTH_FAILURES) >= 4096:
+                        AUTH_FAILURES.pop(next(iter(AUTH_FAILURES)))
+                    attempts = AUTH_FAILURES.setdefault(client_ip, deque())
+                attempts.append(now)
+        return valid
+
+    def read_json_body(self, maximum: int = MAX_JSON_BODY) -> dict | None:
+        try:
+            length = int(self.headers.get("Content-Length", "0"))
+        except ValueError:
+            self.reply(400, {"error": "invalid_content_length"})
+            return None
+        if length <= 0:
+            self.reply(400, {"error": "empty_request_body"})
+            return None
+        if length > maximum:
+            self.reply(413, {"error": "request_body_too_large"})
+            return None
+        try:
+            raw = self.rfile.read(length)
+            if len(raw) != length:
+                self.reply(400, {"error": "incomplete_request_body"})
+                return None
+            value = json.loads(raw)
+            if not isinstance(value, dict):
+                raise ValueError("JSON object required")
+            return value
+        except (json.JSONDecodeError, UnicodeDecodeError, ValueError):
+            self.reply(400, {"error": "invalid_json"})
+            return None
 
     def do_GET(self) -> None:
         path = urlsplit(self.path)
@@ -172,16 +334,16 @@ class Handler(BaseHTTPRequestHandler):
         elif path.path == "/api/shell/read":
             args = parse_qs(path.query)
             session_id = args.get("sessionId", [""])[0]
+            cleanup_shells()
             with LOCK:
                 session = SHELLS.get(session_id)
                 if not session:
                     self.reply(404, {"error": "shell_session_not_found"})
                     return
-                proc, output, _ = session
-                all_output = "".join(output)
                 after = max(0, int(args.get("after", ["0"])[0]))
-                self.reply(200, {"sessionId": session_id, "output": all_output[after:],
-                                 "exited": proc.poll() is not None, "nextCursor": len(all_output), "truncated": after > len(all_output)})
+                output, next_cursor, truncated = session.read_after(after)
+                self.reply(200, {"sessionId": session_id, "output": output,
+                                 "exited": session.process.poll() is not None, "nextCursor": next_cursor, "truncated": truncated})
         else:
             self.reply(404, {"error": "not_found"})
 
@@ -211,42 +373,54 @@ class Handler(BaseHTTPRequestHandler):
             subprocess.Popen(actions[command], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             self.reply(200, {"ok": True})
         elif path.path == "/api/shell/start":
-            body = json.loads(self.rfile.read(int(self.headers.get("Content-Length", "0"))))
+            body = self.read_json_body(4096)
+            if body is None:
+                return
             if not secrets.compare_digest(str(body.get("screenPassword", "")), SCREEN_PASSWORD_FILE.read_text().strip()):
                 self.reply(403, {"error": "screen_password_required", "message": "Password terminal Linux tidak cocok."})
                 return
             shell = os.environ.get("SHELL", "/bin/bash") if body.get("type") != "cmd" else "/bin/sh"
-            session_id = secrets.token_urlsafe(18)
-            proc = subprocess.Popen([shell, "-i"], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-                                    stderr=subprocess.STDOUT, text=True, bufsize=1)
-            output: list[str] = []
+            cleanup_shells()
+            with LOCK:
+                if len(SHELLS) >= MAX_SHELL_SESSIONS:
+                    self.reply(429, {"error": "too_many_shell_sessions"})
+                    return
+                proc = subprocess.Popen([shell, "-i"], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                                        stderr=subprocess.STDOUT, text=True, bufsize=1, start_new_session=True)
+                session = ShellSession(proc)
+                session_id = secrets.token_urlsafe(18)
+                SHELLS[session_id] = session
             def reader() -> None:
                 for line in proc.stdout:
-                    output.append(line)
-                    if sum(map(len, output)) > 65536:
-                        del output[:max(1, len(output) // 2)]
+                    session.append(line)
             threading.Thread(target=reader, daemon=True).start()
-            with LOCK:
-                SHELLS[session_id] = (proc, output, time.time())
             self.reply(200, {"sessionId": session_id, "workingDirectory": str(Path.home())})
         elif path.path == "/api/shell/input":
-            body = json.loads(self.rfile.read(int(self.headers.get("Content-Length", "0"))))
+            body = self.read_json_body(4096)
+            if body is None:
+                return
             command_text = str(body.get("text", ""))
             session_id = args.get("sessionId", [""])[0]
             with LOCK:
                 session = SHELLS.get(session_id)
                 if not session:
                     self.reply(404, {"error": "shell_session_not_found"})
+                elif len(command_text) > 4096:
+                    self.reply(413, {"error": "shell_input_too_large"})
                 else:
-                    session[0].stdin.write(command_text)
-                    session[0].stdin.flush()
-                    self.reply(200, {"ok": True})
+                    try:
+                        session.process.stdin.write(command_text)
+                        session.process.stdin.flush()
+                        session.last_activity = time.monotonic()
+                        self.reply(200, {"ok": True})
+                    except (OSError, AttributeError):
+                        self.reply(409, {"error": "shell_session_ended"})
         elif path.path == "/api/shell/stop":
             session_id = args.get("sessionId", [""])[0]
             with LOCK:
                 session = SHELLS.pop(session_id, None)
             if session:
-                session[0].terminate()
+                stop_shell_process(session)
             self.reply(200, {"ok": True})
         else:
             self.reply(404, {"error": "not_found"})
@@ -255,22 +429,75 @@ class Handler(BaseHTTPRequestHandler):
         print(f"{self.client_address[0]} {fmt % args}")
 
 
+class LimitedThreadingHTTPServer(ThreadingHTTPServer):
+    daemon_threads = True
+    request_queue_size = 32
+
+    def __init__(self, server_address, request_handler):
+        self._request_slots = threading.BoundedSemaphore(32)
+        self.tls_context: ssl.SSLContext | None = None
+        super().__init__(server_address, request_handler)
+
+    def get_request(self):
+        request, client_address = super().get_request()
+        if self.tls_context is not None:
+            request = self.tls_context.wrap_socket(request, server_side=True, do_handshake_on_connect=False)
+        return request, client_address
+
+    def verify_request(self, request, client_address):
+        return is_allowed_peer(client_address[0])
+
+    def process_request(self, request, client_address):
+        if not self._request_slots.acquire(blocking=False):
+            request.close()
+            return
+        try:
+            super().process_request(request, client_address)
+        except Exception:
+            self._request_slots.release()
+            raise
+
+    def process_request_thread(self, request, client_address):
+        try:
+            super().process_request_thread(request, client_address)
+        finally:
+            self._request_slots.release()
+
+
+def cleanup_shells_loop() -> None:
+    while True:
+        time.sleep(60)
+        cleanup_shells()
+
+
+def stop_all_shells() -> None:
+    with LOCK:
+        sessions = list(SHELLS.values())
+        SHELLS.clear()
+    for session in sessions:
+        stop_shell_process(session)
+
+
 def main() -> None:
     initialize()
     der = subprocess.check_output(["openssl", "x509", "-in", str(CERT), "-outform", "DER"])
     fingerprint = hashlib.sha256(der).hexdigest().upper()
-    print("LaptopStatus Linux berjalan; panel Android bisa disambungkan secara manual.")
-    print(f"Host: {platform.node()}   Port: {PORT}")
-    print(f"Token pairing: {TOKEN_FILE.read_text().strip()}")
+    bind_address = os.environ.get("LAPTOPSTATUS_BIND", "0.0.0.0")
+    print("LaptopStatus Linux berjalan; buka menu tray untuk melihat informasi pairing.")
+    print(f"Host: {platform.node()}   Bind: {bind_address}   Port: {PORT}")
     print(f"Fingerprint TLS: {fingerprint}")
-    print(f"Password terminal: {SCREEN_PASSWORD_FILE.read_text().strip()}")
-    print("Jangan bagikan token atau fingerprint ini kepada orang lain.")
-    server = ThreadingHTTPServer(("0.0.0.0", PORT), Handler)
+    threading.Thread(target=cleanup_shells_loop, daemon=True).start()
+    server = LimitedThreadingHTTPServer((bind_address, PORT), Handler)
     context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
     context.minimum_version = ssl.TLSVersion.TLSv1_2
     context.load_cert_chain(CERT, KEYFILE)
-    server.socket = context.wrap_socket(server.socket, server_side=True)
-    server.serve_forever()
+    server.tls_context = context
+    signal.signal(signal.SIGTERM, lambda _signum, _frame: threading.Thread(target=server.shutdown, daemon=True).start())
+    try:
+        server.serve_forever()
+    finally:
+        server.server_close()
+        stop_all_shells()
 
 
 if __name__ == "__main__":

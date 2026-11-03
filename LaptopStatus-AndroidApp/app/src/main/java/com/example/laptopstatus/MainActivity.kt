@@ -45,6 +45,7 @@ import android.widget.TextView
 import android.widget.Toast
 import android.view.View
 import android.view.ViewGroup
+import android.view.ViewStub
 import android.view.MotionEvent
 import android.view.DragEvent
 import android.view.DragAndDropPermissions
@@ -56,6 +57,9 @@ import android.view.animation.OvershootInterpolator
 import android.webkit.JavascriptInterface
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import android.webkit.WebResourceRequest
+import android.webkit.WebResourceResponse
+import androidx.webkit.WebViewAssetLoader
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.widget.SwitchCompat
@@ -78,6 +82,7 @@ import org.json.JSONObject
 import java.net.DatagramPacket
 import java.net.DatagramSocket
 import java.net.InetSocketAddress
+import java.io.ByteArrayInputStream
 import java.net.URLEncoder
 import java.io.ByteArrayOutputStream
 import java.io.File
@@ -136,6 +141,16 @@ class MainActivity : AppCompatActivity() {
     private val discoveryWorker = Executors.newSingleThreadExecutor()
     private val dataWorker = Executors.newFixedThreadPool(2)
     private val main = Handler(Looper.getMainLooper())
+    private val monitorNotificationPermissionRequest = registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        if (!pendingMonitorEnable) return@registerForActivityResult
+        pendingMonitorEnable = false
+        if (granted && NotificationManagerCompat.from(this).areNotificationsEnabled()) {
+            setBackgroundMonitoring(true)
+        } else {
+            setMonitorSwitch(false)
+            showNotificationPermissionRequired()
+        }
+    }
     private val screenRefresh = Handler(Looper.getMainLooper())
     private val remoteShellPollHandler = Handler(Looper.getMainLooper())
     private val remoteShellPollInFlight = AtomicBoolean(false)
@@ -173,6 +188,7 @@ class MainActivity : AppCompatActivity() {
     private var selectedDiscoveryStatus: TextView? = null
     private var failedDiscoveryDeviceId: String? = null
     private var pendingConnectionDeviceId: String? = null
+    private var pendingMonitorEnable = false
     @Volatile private var lastDiscoveryAttemptAt = 0L
     private lateinit var prefs: SharedPreferences
     private lateinit var addressInput: EditText
@@ -209,6 +225,8 @@ class MainActivity : AppCompatActivity() {
     private lateinit var ramRing: MetricRingView
     private lateinit var batteryRing: MetricRingView
     private lateinit var motionDemoWebView: WebView
+    private var motionDemoWebViewConfigured = false
+    private lateinit var motionDemoAssetLoader: WebViewAssetLoader
     @Volatile private var latestStatusPayload = "{\"online\":false}"
     @Volatile private var latestHistoryPayload = "[]"
     @Volatile private var latestMemoryPayload = "{}"
@@ -473,7 +491,10 @@ class MainActivity : AppCompatActivity() {
             if (!prefs.getBoolean("onboardingCompleted", false) && !prefs.getBoolean("motionDemoUi", true)) safeShowOnboardingGuide()
             else consumePendingAssistantIntent()
         }
-        configureMotionDemoWebView()
+        if (prefs.getBoolean("motionDemoUi", true)) {
+            configureMotionDemoWebView()
+            applyMotionDemoMode()
+        } else findViewById<View>(R.id.appRoot).visibility = View.VISIBLE
     }
 
     private fun animateEntrance() {
@@ -742,11 +763,16 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun configureMotionDemoWebView() {
+        if (motionDemoWebViewConfigured) return
+        findViewById<ViewStub>(R.id.motionDemoWebViewStub).inflate()
         motionDemoWebView = findViewById(R.id.motionDemoWebView)
+        motionDemoAssetLoader = WebViewAssetLoader.Builder()
+            .addPathHandler("/assets/", WebViewAssetLoader.AssetsPathHandler(this))
+            .build()
         motionDemoWebView.settings.apply {
             javaScriptEnabled = true
             domStorageEnabled = true
-            allowFileAccess = true
+            allowFileAccess = false
             allowContentAccess = false
             javaScriptCanOpenWindowsAutomatically = false
             setSupportMultipleWindows(false)
@@ -757,30 +783,67 @@ class MainActivity : AppCompatActivity() {
         motionDemoWebView.webViewClient = object : WebViewClient() {
             override fun onPageFinished(view: WebView, url: String) {
                 super.onPageFinished(view, url)
+                if (!isTrustedMotionAsset(Uri.parse(url))) return
                 motionDemoPageReady = true
-                syncMotionDemoPreferences()
-                publishMotionDemoStatus()
-                publishMotionDemoHistory()
-                publishMotionDemoMemory()
-                publishMotionDemoProcesses()
-                publishMotionTroubleshootingLog()
-                publishMotionDemoDiscoveredDevices()
-                publishMotionDemoScreenState()
-                installWindowsToolsInLog(view)
-                if (prefs.getBoolean("motionDemoUi", true) && !prefs.getBoolean("classicTheme", false)) {
-                    loadScheduleForDemoRequest(reportErrors = false)
-                }
                 view.requestLayout()
                 view.postInvalidateOnAnimation()
-                view.evaluateJavascript("window.LaptopStatus&&window.LaptopStatus.ensureVisible()", null)
+                view.post {
+                    if (isFinishing || isDestroyed) return@post
+                    syncMotionDemoPreferences()
+                    publishMotionDemoStatus()
+                    installWindowsToolsInLog(view)
+                    view.evaluateJavascript("window.LaptopStatus&&window.LaptopStatus.ensureVisible()", null)
+                    view.postDelayed({
+                        if (isFinishing || isDestroyed) return@postDelayed
+                        publishMotionDemoHistory()
+                        publishMotionTroubleshootingLog()
+                        publishMotionDemoDiscoveredDevices()
+                        publishMotionDemoScreenState()
+                    }, 250)
+                    view.postDelayed({
+                        if (isFinishing || isDestroyed) return@postDelayed
+                        publishMotionDemoMemory()
+                        publishMotionDemoProcesses()
+                        if (prefs.getBoolean("motionDemoUi", true) && !prefs.getBoolean("classicTheme", false)) {
+                            loadScheduleForDemoRequest(reportErrors = false)
+                        }
+                    }, 500)
+                }
             }
 
+            override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest) =
+                interceptMotionResource(request.url)
+
+            @Suppress("DEPRECATION")
+            override fun shouldInterceptRequest(view: WebView, url: String) =
+                interceptMotionResource(Uri.parse(url))
+
+            override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean =
+                !isTrustedMotionAsset(request.url)
+
+            @Suppress("DEPRECATION")
             override fun shouldOverrideUrlLoading(view: WebView, url: String): Boolean =
-                !url.startsWith("file:///android_asset/", ignoreCase = true)
+                !isTrustedMotionAsset(Uri.parse(url))
         }
+        motionDemoWebViewConfigured = true
         loadMotionDemoPage()
-        applyMotionDemoMode()
     }
+
+    private fun isTrustedMotionAsset(uri: Uri): Boolean =
+        uri.scheme == "https" && uri.host == "appassets.androidplatform.net" &&
+            uri.port == -1 && uri.path?.startsWith("/assets/") == true
+
+    private fun interceptMotionResource(uri: Uri): WebResourceResponse? {
+        if (isTrustedMotionAsset(uri)) {
+            return motionDemoAssetLoader.shouldInterceptRequest(uri) ?: blockedMotionResource()
+        }
+        if (uri.scheme in setOf("data", "blob", "about")) return null
+        return blockedMotionResource()
+    }
+
+    private fun blockedMotionResource() = WebResourceResponse(
+        "text/plain", "UTF-8", 403, "Blocked", emptyMap(), ByteArrayInputStream(ByteArray(0))
+    )
 
     private fun installWindowsToolsInLog(view: WebView) {
         val script = """
@@ -825,12 +888,16 @@ class MainActivity : AppCompatActivity() {
         motionDemoPageReady = false
         val asset = if (prefs.getBoolean("classicTheme", false)) "demo-android-motion-lama.html" else "demo-android-motion.html"
         currentMotionDemoAsset = asset
-        motionDemoWebView.loadUrl("file:///android_asset/$asset")
+        motionDemoWebView.loadUrl("https://appassets.androidplatform.net/assets/$asset")
     }
 
     private fun applyMotionDemoMode() {
-        if (!::motionDemoWebView.isInitialized) return
         val enabled = prefs.getBoolean("motionDemoUi", true) && !temporaryNativeUiForWebAction
+        if (enabled && !motionDemoWebViewConfigured) configureMotionDemoWebView()
+        if (!::motionDemoWebView.isInitialized) {
+            findViewById<View>(R.id.appRoot).visibility = View.VISIBLE
+            return
+        }
         findViewById<View>(R.id.appRoot).visibility = if (enabled) View.GONE else View.VISIBLE
         motionDemoWebView.visibility = if (enabled) View.VISIBLE else View.GONE
         findViewById<SwitchCompat>(R.id.motionDemoUiSwitch).isChecked = prefs.getBoolean("motionDemoUi", true)
@@ -2918,8 +2985,22 @@ class MainActivity : AppCompatActivity() {
 
     private fun requestNotificationPermission() {
         if (Build.VERSION.SDK_INT >= 33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
-            requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 4101)
+            monitorNotificationPermissionRequest.launch(Manifest.permission.POST_NOTIFICATIONS)
         }
+    }
+
+    private fun showNotificationPermissionRequired() {
+        AlertDialog.Builder(this)
+            .setTitle("Izinkan notifikasi Laptop Status")
+            .setMessage("Pemantauan latar belakang memakai notifikasi tetap di panel Android untuk menampilkan status laptop dan memastikan layanannya terlihat.")
+            .setNegativeButton("Nanti", null)
+            .setPositiveButton("Pengaturan") { _, _ ->
+                runCatching {
+                    startActivity(Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS)
+                        .putExtra(Settings.EXTRA_APP_PACKAGE, packageName))
+                }
+            }
+            .show()
     }
 
     private fun notifyLaptopOnline(name: String, now: String) {
@@ -4155,6 +4236,18 @@ class MainActivity : AppCompatActivity() {
             findViewById<TextView>(R.id.connectionInfo).text = "Pemantauan latar belakang dimatikan."
             return
         }
+        if (Build.VERSION.SDK_INT >= 33 &&
+            checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+            pendingMonitorEnable = true
+            setMonitorSwitch(false)
+            monitorNotificationPermissionRequest.launch(Manifest.permission.POST_NOTIFICATIONS)
+            return
+        }
+        if (!NotificationManagerCompat.from(this).areNotificationsEnabled()) {
+            setMonitorSwitch(false)
+            showNotificationPermissionRequired()
+            return
+        }
         if (address.isBlank() || key.isBlank()) {
             setMonitorSwitch(false)
             findViewById<TextView>(R.id.connectionInfo).text = "Hubungkan ke laptop dan simpan kunci pairing terlebih dahulu."
@@ -4267,6 +4360,11 @@ class MainActivity : AppCompatActivity() {
         super.onResume()
         if (!::prefs.isInitialized) return
         prefs.edit().putBoolean("mainActivityVisible", true).apply()
+        if (prefs.getBoolean("backgroundMonitor", false) &&
+            (Build.VERSION.SDK_INT < 33 || checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == android.content.pm.PackageManager.PERMISSION_GRANTED) &&
+            NotificationManagerCompat.from(this).areNotificationsEnabled()) {
+            runCatching { syncMonitorService() }
+        }
         if (prefs.getBoolean("pendingAndroidJokeOverlayPermission", false)) {
             finishJokeOverlayPermission(Settings.canDrawOverlays(this))
         }
@@ -6143,6 +6241,12 @@ class MainActivity : AppCompatActivity() {
         remoteShellWorker.shutdown()
         discoveryWorker.shutdownNow()
         dataWorker.shutdownNow()
+        if (::motionDemoWebView.isInitialized) {
+            motionDemoWebView.stopLoading()
+            motionDemoWebView.removeJavascriptInterface("Android")
+            (motionDemoWebView.parent as? ViewGroup)?.removeView(motionDemoWebView)
+            motionDemoWebView.destroy()
+        }
         super.onDestroy()
     }
 }

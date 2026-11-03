@@ -10,19 +10,21 @@ python3 -c 'import tkinter, pystray, PIL' 2>/dev/null || {
 command -v openssl >/dev/null || { echo "OpenSSL belum tersedia." >&2; exit 1; }
 
 install_dir="$HOME/.local/opt/laptopstatus"
-mkdir -p "$install_dir" "$HOME/.local/share/applications"
+mkdir -p "$install_dir" "$HOME/.local/share/applications" "$HOME/.config/autostart"
 install -m 755 "$source_dir/laptopstatus_linux.py" "$install_dir/"
 install -m 755 "$source_dir/laptopstatus_tray.py" "$install_dir/"
-cat > "$HOME/.local/share/applications/laptopstatus.desktop" <<EOF
+desktop_exec_path="$(python3 -c 'import sys; p=sys.argv[1]; print("\"" + p.replace("\\", "\\\\").replace("\"", "\\\"").replace("$", "\\$").replace("`", "\\`").replace("%", "%%") + "\"")' "$install_dir/laptopstatus_tray.py")"
+desktop_file="$HOME/.local/share/applications/laptopstatus.desktop"
+cat > "$desktop_file" <<EOF
 [Desktop Entry]
 Type=Application
 Name=LaptopStatus
 Comment=Pantau dan kendalikan Linux dari Android
-Exec=python3 $install_dir/laptopstatus_tray.py
+Exec=python3 $desktop_exec_path
 Icon=computer
 Terminal=false
 Categories=Utility;System;
-X-GNOME-Autostart-enabled=true
 EOF
-chmod 644 "$HOME/.local/share/applications/laptopstatus.desktop"
-echo "LaptopStatus Linux dipasang. Buka LaptopStatus dari menu aplikasi untuk menjalankan ikon tray."
+chmod 644 "$desktop_file"
+install -m 644 "$desktop_file" "$HOME/.config/autostart/laptopstatus.desktop"
+echo "LaptopStatus Linux dipasang. Ikon tray akan berjalan otomatis saat login dan tersedia di menu aplikasi."

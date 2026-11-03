@@ -28,6 +28,7 @@ import java.util.concurrent.TimeUnit
 
 class MonitorService : Service() {
     private val scheduler = Executors.newSingleThreadScheduledExecutor()
+    @Volatile private var lastMonitorNotificationText = ""
 
     override fun onCreate() {
         super.onCreate()
@@ -45,9 +46,10 @@ class MonitorService : Service() {
             getSystemService(NotificationManager::class.java).deleteNotificationChannel("laptop_app_jokes")
         createNotificationChannel()
         val serviceTypes = if (Build.VERSION.SDK_INT >= 34)
-            ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE or ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE
+            ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE
         else ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE
-        ServiceCompat.startForeground(this, 4100, monitoringNotification(), serviceTypes)
+        ServiceCompat.startForeground(this, MONITOR_NOTIFICATION_ID,
+            monitoringNotification("Menghubungkan ke laptop", "Notifikasi status Laptop Status aktif."), serviceTypes)
         scheduler.scheduleWithFixedDelay(::checkLaptop, 0, 15, TimeUnit.SECONDS)
     }
 
@@ -56,7 +58,8 @@ class MonitorService : Service() {
             stopSelf(startId)
             return START_NOT_STICKY
         }
-        NotificationManagerCompat.from(this).notify(4100, monitoringNotification())
+        NotificationManagerCompat.from(this).notify(MONITOR_NOTIFICATION_ID,
+            monitoringNotification("Menghubungkan ke laptop", "Notifikasi status Laptop Status aktif."))
         return START_STICKY
     }
 
@@ -69,6 +72,7 @@ class MonitorService : Service() {
 
         var online = false
         var name = "Laptop"
+        var status: JSONObject? = null
         try {
             val fingerprint = prefs.getString("fingerprint", "").orEmpty()
             val data = try {
@@ -80,12 +84,15 @@ class MonitorService : Service() {
                 prefs.edit().putString("address", lan).apply()
                 recovered
             }
-            val status = data.second
+            status = data.second
             online = status.optBoolean("online", true)
             name = status.optString("deviceName", "Laptop")
             updateAndroidJokeOverlay(prefs, status)
             if (online) LaptopBatteryAlerts.checkAndNotify(this, status)
         } catch (_: Exception) { }
+
+        if (prefs.getBoolean("backgroundMonitor", false))
+            postMonitoringStatus(name, online, status)
 
         val hadSample = prefs.getBoolean("monitorHasSample", false)
         val wasOnline = prefs.getBoolean("monitorWasOnline", false)
@@ -214,14 +221,47 @@ class MonitorService : Service() {
         catch (_: SecurityException) { }
     }
 
-    private fun monitoringNotification(): Notification {
-        val prefs = getSharedPreferences("connection", MODE_PRIVATE)
-        val laptopMonitoring = prefs.getBoolean("backgroundMonitor", false)
+    private fun postMonitoringStatus(name: String, online: Boolean, status: JSONObject?) {
+        val metrics = buildList {
+            status?.optDouble("cpuPercent", Double.NaN)?.takeIf { it.isFinite() && it in 0.0..100.0 }
+                ?.let { add("CPU ${it.toInt()}%") }
+            status?.optDouble("ramPercent", Double.NaN)?.takeIf { it.isFinite() && it in 0.0..100.0 }
+                ?.let { add("RAM ${it.toInt()}%") }
+            if (status != null && !status.isNull("batteryPercent")) {
+                val battery = status.optInt("batteryPercent", -1)
+                if (battery in 0..100) add("Baterai $battery%")
+            }
+        }
+        val title = if (online) "$name terhubung" else "$name tidak terjangkau"
+        val details = if (online && metrics.isNotEmpty()) metrics.joinToString("  ·  ")
+            else if (online) "Laptop aktif · menunggu data sensor"
+            else "Pemeriksaan otomatis berjalan di latar belakang"
+        val signature = "$title\n$details"
+        if (signature == lastMonitorNotificationText) return
+        lastMonitorNotificationText = signature
+        runCatching {
+            NotificationManagerCompat.from(this).notify(MONITOR_NOTIFICATION_ID, monitoringNotification(title, details))
+        }
+    }
+
+    private fun monitoringNotification(title: String, details: String): Notification {
+        val openAppIntent = Intent(this, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+        val contentIntent = PendingIntent.getActivity(
+            this,
+            MONITOR_NOTIFICATION_ID,
+            openAppIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
         return NotificationCompat.Builder(this, MONITOR_CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_laptop)
-            .setContentTitle("Pemantauan laptop aktif")
-            .setContentText(if (laptopMonitoring) "Memeriksa koneksi laptop setiap 15 detik" else "Pemantauan koneksi laptop")
+            .setContentTitle(title)
+            .setContentText(details)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(details))
+            .setContentIntent(contentIntent)
             .setOngoing(true)
+            .setOnlyAlertOnce(true)
+            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+            .setCategory(NotificationCompat.CATEGORY_SERVICE)
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .build()
     }

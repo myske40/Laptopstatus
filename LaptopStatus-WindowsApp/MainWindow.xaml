@@ -231,16 +231,28 @@
                 </ScrollViewer>
             </Border>
 
-            <Border x:Name="HistoryPanel" Style="{StaticResource GlassPanel}" Padding="22" VerticalAlignment="Top" Visibility="Collapsed">
-                <StackPanel>
-                    <DockPanel LastChildFill="False" Margin="0,0,0,8">
-                        <Button DockPanel.Dock="Right" Content="Hapus riwayat" Click="ClearWindowsHistory_Click" Style="{StaticResource PrimaryButton}" Padding="10,5" FontSize="11"/>
-                        <TextBlock Text="Riwayat Perangkat" Foreground="{StaticResource TextBrush}" FontSize="15" FontWeight="SemiBold" VerticalAlignment="Center"/>
-                    </DockPanel>
-                    <ScrollViewer MaxHeight="480" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
-                        <TextBlock x:Name="WindowsHistoryText" Text="Aplikasi Windows siap menerima koneksi dari Android." Foreground="{StaticResource TextDimBrush}" FontSize="12" TextWrapping="Wrap"/>
-                    </ScrollViewer>
-                </StackPanel>
+            <Border x:Name="HistoryPanel" Style="{StaticResource GlassPanel}" Padding="22" VerticalAlignment="Stretch" Visibility="Collapsed">
+                <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                    <StackPanel>
+                        <Grid Margin="0,0,0,14">
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                            <StackPanel>
+                                <TextBlock Text="Riwayat Perangkat" Foreground="{StaticResource TextBrush}" FontSize="18" FontWeight="SemiBold"/>
+                                <TextBlock Text="Koneksi Android, baterai, dan aktivitas terbaru di Windows." Foreground="{StaticResource TextDimBrush}" FontSize="11" TextWrapping="Wrap" Margin="0,4,10,0"/>
+                            </StackPanel>
+                            <Button Grid.Column="1" Content="Hapus riwayat" Click="ClearWindowsHistory_Click" Padding="12,7" VerticalAlignment="Center"/>
+                        </Grid>
+                        <Border Background="{DynamicResource Panel2Brush}" BorderBrush="{DynamicResource GlassLineBrush}" BorderThickness="1" CornerRadius="13" Padding="4" Margin="0,0,0,12">
+                            <StackPanel Orientation="Horizontal">
+                                <Button x:Name="HistoryFilterAllButton" Content="Semua" Tag="all" Click="WindowsHistoryFilter_Click" Padding="14,8" MinWidth="78" Background="#263B4A" BorderBrush="#3D72E4BF"/>
+                                <Button x:Name="HistoryFilterConnectionButton" Content="Koneksi" Tag="connection" Click="WindowsHistoryFilter_Click" Padding="14,8" MinWidth="84" Margin="3,0,0,0" Background="Transparent" BorderBrush="Transparent" Foreground="{StaticResource TextDimBrush}"/>
+                                <Button x:Name="HistoryFilterBatteryButton" Content="Baterai" Tag="battery" Click="WindowsHistoryFilter_Click" Padding="14,8" MinWidth="82" Margin="3,0,0,0" Background="Transparent" BorderBrush="Transparent" Foreground="{StaticResource TextDimBrush}"/>
+                            </StackPanel>
+                        </Border>
+                        <TextBlock x:Name="WindowsHistorySummaryText" Text="Menyimpan hingga 20 aktivitas terbaru di laptop ini." Foreground="{StaticResource TextDimBrush}" FontSize="10" Margin="0,0,0,8"/>
+                        <StackPanel x:Name="WindowsHistoryList"/>
+                    </StackPanel>
+                </ScrollViewer>
             </Border>
 
             <Border x:Name="SettingsPanel" Style="{StaticResource GlassPanel}" Padding="22" VerticalAlignment="Stretch" MinHeight="260" Visibility="Collapsed">
@@ -329,6 +341,13 @@
                     <TextBox x:Name="SavedScreenAccessPasswordText" IsReadOnly="True" TextWrapping="Wrap" Visibility="Collapsed" Margin="0,6,0,0" FontFamily="Consolas"/>
                     <TextBlock Text="Disimpan terenkripsi (DPAPI) dan hanya bisa dibuka dari akun Windows ini." Foreground="{StaticResource TextDimBrush}" FontSize="10" TextWrapping="Wrap" Margin="0,4,0,0"/>
                     <TextBlock Text="Port layar aman: 8767" Foreground="{StaticResource TextDimBrush}" FontSize="11" Margin="0,5,0,0"/>
+                    <Border Background="#33291E2A" BorderBrush="#884A3340" BorderThickness="1" CornerRadius="12" Padding="14" Margin="0,18,0,0">
+                        <StackPanel>
+                            <TextBlock Text="Tutup LaptopStatus" Foreground="{StaticResource TextBrush}" FontSize="12" FontWeight="SemiBold"/>
+                            <TextBlock Text="Menghentikan aplikasi LaptopStatus dan koneksi ke Android. Aplikasi Windows lain tidak akan ditutup." Foreground="{StaticResource TextDimBrush}" FontSize="10" TextWrapping="Wrap" Margin="0,4,0,10"/>
+                            <Button Content="Keluar dari LaptopStatus" Click="ExitApplication_Click" HorizontalAlignment="Left" Padding="14,8" Background="#663D2028" BorderBrush="#AA8C4352" Foreground="#FFFFD7DC"/>
+                        </StackPanel>
+                    </Border>
                 </StackPanel>
                 </ScrollViewer>
             </Border>

@@ -2,6 +2,8 @@
 
 ![LaptopStatus — kendali laptop dari Android](assets/laptopstatus-banner.svg)
 
+![LaptopStatus — 100% AI-generated, dibuat dengan bantuan AI](assets/laptopstatus-ai-banner.svg)
+
 **Bahasa Indonesia** | [English](#english)
 
 ---
@@ -16,7 +18,7 @@ LaptopStatus membantu memantau dan mengendalikan laptop Windows atau Linux dari 
 
 Host Linux tahap awal tersedia di [`LaptopStatus-LinuxApp`](LaptopStatus-LinuxApp/README.md). Host ini memakai ikon tray dan sambungan TLS manual ke Android; fiturnya belum selengkap aplikasi Windows.
 
-Ponsel terhubung ke laptop lewat **Cloudflare Tunnel (cloudflared)**, jadi laptop tetap bisa dijangkau dari jaringan lain tanpa perlu mengatur port forwarding. Pemasangan perangkat dilakukan dengan pairing melalui kode QR.
+Ponsel dapat terhubung ke laptop lewat jaringan lokal, Tailscale, atau Cloudflare Tunnel (opsional), tanpa perlu mengatur port forwarding. Pemasangan perangkat dilakukan dengan pairing melalui kode QR.
 
 ### Fitur
 
@@ -111,7 +113,27 @@ LaptopStatus-Setup/        Proyek installer Windows
 - Jangan pernah memasukkan keystore, sertifikat `.pfx`, atau token ke repositori.
 
 ### Lisensi
-nanti yaa
+
+LaptopStatus dilisensikan di bawah [MIT License](LICENSE). Lisensi ini mengizinkan penggunaan, perubahan, dan distribusi dengan mempertahankan pemberitahuan hak cipta dan lisensi.
+
+### Dibuat dengan AI
+
+> # 100% AI-GENERATED
+>
+> Kode aplikasi, antarmuka, dan dokumentasi proyek ini dihasilkan dengan bantuan AI. Pengguna memberikan tujuan, kebutuhan fitur, tangkapan layar, laporan bug, serta umpan balik pengujian dan menentukan keputusan rilis.
+
+AI dipakai agar pengembangan lintas Android, Windows, dan Linux lebih cepat; membantu membaca log dan mencari penyebab bug; serta mempercepat iterasi UI dari laporan dan tangkapan layar. Pengujian pada perangkat dan keputusan produk tetap ditinjau manusia.
+
+#### Transkrip ringkas proses pembuatan
+
+Ini ringkasan alur pengembangan, bukan salinan kata demi kata dari percakapan:
+
+1. **Pengguna:** Menjelaskan kebutuhan memantau dan mengendalikan laptop dari Android, termasuk koneksi, terminal, kontrol daya, dan aplikasi desktop.
+2. **AI:** Menyusun struktur aplikasi Android, Windows, lalu host Linux; menambahkan pairing TLS, API perangkat, serta alur pemasangan dan penggunaan.
+3. **Pengguna:** Mengirim tangkapan layar, laporan tampilan terpotong, notifikasi berulang, crash, serta perilaku shutdown dan tray yang tidak sesuai.
+4. **AI:** Memeriksa kode dan log Windows, memperbaiki alur koneksi, notifikasi, tray fallback, riwayat, layout, serta proses build.
+5. **Pengguna:** Meninjau hasil di perangkat dan mengarahkan perubahan berikutnya. **AI:** Memperbarui implementasi, dokumentasi, dan paket uji berdasarkan umpan balik itu.
+6. **Pengguna:** Menyetujui kapan dokumentasi dan rilis GitHub diperbarui. AI tidak menerbitkan rilis sebelum persetujuan tersebut.
 
 ---
 
@@ -125,7 +147,7 @@ LaptopStatus helps you monitor and control a Windows or Linux laptop from an And
 - An **Android app** (Kotlin) that runs on the phone as a companion.
 - An **early Linux host** (Python) for systemd-based desktop distributions.
 
-The phone connects to the laptop through a **Cloudflare Tunnel (cloudflared)**, so the laptop stays reachable from other networks without any port forwarding. Devices are paired with a QR code.
+The phone can connect to the laptop over a local network, Tailscale, or an optional Cloudflare Tunnel without port forwarding. Devices are paired with a QR code.
 
 The Linux host is in [`LaptopStatus-LinuxApp`](LaptopStatus-LinuxApp/README.md). It uses a tray icon and manual TLS pairing with Android; feature coverage is still limited compared with Windows.
 
@@ -223,5 +245,24 @@ LaptopStatus-Setup/        Windows installer project
 
 ### License
 
-soon
+LaptopStatus is licensed under the [MIT License](LICENSE). It permits use, modification, and distribution as long as the copyright and license notices are retained.
+
+### Made with AI
+
+> # 100% AI-GENERATED
+>
+> The app code, interfaces, and project documentation were generated with AI assistance. The user supplied the goals, feature requirements, screenshots, bug reports, and testing feedback, and made product and release decisions.
+
+AI was used to speed up development across Android, Windows, and Linux; help inspect logs and diagnose bugs; and iterate on UI changes from screenshots and reports. A human reviewed device testing and product decisions.
+
+#### Condensed development transcript
+
+This is a summary of the development flow, not a verbatim chat transcript:
+
+1. **User:** Described the need to monitor and control a laptop from Android, including connectivity, terminal, power controls, and desktop apps.
+2. **AI:** Set up the Android and Windows apps, followed by an early Linux host; added TLS pairing, device APIs, and installation guidance.
+3. **User:** Shared screenshots and reports about clipped layouts, repeated notifications, crashes, and unexpected shutdown and tray behavior.
+4. **AI:** Inspected the code and Windows logs, then revised connection handling, notifications, tray fallback, history, layouts, and build steps.
+5. **User:** Reviewed results on devices and directed the next changes. **AI:** Updated implementation, documentation, and test packages from that feedback.
+6. **User:** Decided when documentation and GitHub releases could be updated. AI did not publish a release before approval.
 
