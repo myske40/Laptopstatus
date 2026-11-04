@@ -6,12 +6,15 @@ using System.Drawing.Drawing2D;
 using System.Security.Principal;
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.Json;
 using System.Text.RegularExpressions;
 using System.Xml;
 using System.Windows.Forms;
 using Microsoft.Win32;
 using System.Xml.Linq;
 using Timer = System.Windows.Forms.Timer;
+using Microsoft.Web.WebView2.Core;
+using Microsoft.Web.WebView2.WinForms;
 
 namespace LaptopStatusSetup;
 
@@ -27,14 +30,30 @@ internal static class Program
 
 internal sealed class SetupForm : Form
 {
-    private readonly Panel _content = new() { Dock = DockStyle.Fill, Padding = Padding.Empty, BackColor = Color.FromArgb(18, 24, 33) };
-    private readonly Panel _header = new() { Dock = DockStyle.Top, Height = 76, BackColor = Color.FromArgb(12, 18, 26) };
-    private readonly Panel _footer = new() { Dock = DockStyle.Bottom, Height = 72, BackColor = Color.FromArgb(12, 18, 26), Padding = new Padding(0, 12, 0, 12) };
+    [System.Runtime.InteropServices.DllImport("user32.dll", EntryPoint = "ReleaseCapture", SetLastError = true)]
+    [return: System.Runtime.InteropServices.MarshalAs(System.Runtime.InteropServices.UnmanagedType.Bool)]
+    private static extern bool NativeReleaseCapture();
+
+    [System.Runtime.InteropServices.DllImport("user32.dll", EntryPoint = "SendMessageW", CharSet = System.Runtime.InteropServices.CharSet.Unicode, ExactSpelling = true, SetLastError = true)]
+    private static extern IntPtr SendWindowMessage(IntPtr handle, int message, IntPtr wParam, IntPtr lParam);
+
+    private const int WmNcLeftButtonDown = 0x00A1;
+    private static readonly IntPtr HtCaption = new IntPtr(2);
+    private readonly Panel _shell = new() { Dock = DockStyle.Fill, BackColor = Color.FromArgb(244, 246, 243) };
+    private readonly Panel _mainColumn = new() { Dock = DockStyle.Fill, BackColor = Color.FromArgb(244, 246, 243) };
+    private readonly Panel _stepRail = new() { Dock = DockStyle.Left, Width = 224, BackColor = Color.FromArgb(14, 26, 39) };
+    private readonly Panel _content = new() { Dock = DockStyle.Fill, Padding = Padding.Empty, BackColor = Color.FromArgb(251, 252, 250) };
+    private readonly Panel _header = new() { Dock = DockStyle.Top, Height = 48, BackColor = Color.FromArgb(10, 19, 29) };
+    private readonly Panel _footer = new() { Dock = DockStyle.Bottom, Height = 72, BackColor = Color.FromArgb(10, 19, 29), Padding = new Padding(0, 12, 0, 12) };
     private readonly VScrollBar _pageScrollBar = new() { Dock = DockStyle.Right, Width = SystemInformation.VerticalScrollBarWidth, Visible = false, SmallChange = 32 };
     private readonly FlowLayoutPanel _footerButtons = new() { Dock = DockStyle.Fill, AutoSize = false, FlowDirection = FlowDirection.LeftToRight, WrapContents = false, Padding = new Padding(0, 0, 24, 0), BackColor = Color.Transparent };
-    private readonly FlowLayoutPanel _pageBody = new() { Location = Point.Empty, FlowDirection = FlowDirection.TopDown, WrapContents = false, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, Padding = new Padding(28, 24, 28, 28), BackColor = Color.FromArgb(18, 24, 33) };
+    private readonly FlowLayoutPanel _pageBody = new() { Location = Point.Empty, FlowDirection = FlowDirection.TopDown, WrapContents = false, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, Padding = new Padding(34, 28, 34, 30), BackColor = Color.FromArgb(251, 252, 250) };
+    private readonly WebView2 _webWizard = new() { Dock = DockStyle.Fill, Visible = false };
     private readonly string _defaultInstallPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Programs", "LaptopStatus");
+    private readonly string _wizardFilesDirectory = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "LaptopStatus", "InstallerWizard", "2.13.26");
+    private readonly string _webViewUserDataDirectory = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "LaptopStatus", "InstallerWebView2");
     private readonly Timer _installStatusTimer = new() { Interval = 1050 };
+    private readonly Timer _iconMotionTimer = new() { Interval = 40 };
     private readonly Dictionary<Button, Timer> _buttonColorAnimations = new();
     private readonly HashSet<Control> _wheelHooked = new();
     private TextBox? _installPath;
@@ -56,6 +75,14 @@ internal sealed class SetupForm : Form
     private bool _taskbarPinSucceeded;
     private bool _startPinSucceeded;
     private bool _pageLayoutBusy;
+    private bool _webWizardActive;
+    private bool _webWizardReady;
+    private Task<CoreWebView2Environment>? _webViewEnvironmentTask;
+    private bool _darkTheme;
+    private Button? _themeButton;
+    private readonly List<(Panel Marker, Label Title, Label Note)> _wizardSteps = new();
+    private BrandMark? _brandMark;
+    private double _motionPhase;
     private int _installStatusIndex;
     private static readonly string[] BasicInstallStatusMessages = { "Menyiapkan berkas aplikasi…", "Menyalin aplikasi ke folder pilihan…", "Menyelesaikan pengaturan Windows…" };
     private static readonly string[] TailscaleInstallStatusMessages = { "Menyiapkan berkas aplikasi…", "Menyalin aplikasi ke folder pilihan…", "Mengunduh dan memeriksa Tailscale resmi…", "Menyelesaikan pengaturan Windows…" };
@@ -67,16 +94,16 @@ internal sealed class SetupForm : Form
         AutoScaleMode = AutoScaleMode.Dpi;
         AutoScaleDimensions = new SizeF(96f, 96f);
         var workArea = Screen.FromPoint(Cursor.Position).WorkingArea;
-        var formWidth = Math.Max(Math.Min(360, workArea.Width), Math.Min(820, workArea.Width - 48));
-        var formHeight = Math.Max(Math.Min(360, workArea.Height), Math.Min(700, workArea.Height - 48));
+        var formWidth = Math.Max(Math.Min(680, workArea.Width), Math.Min(940, workArea.Width - 48));
+        var formHeight = Math.Max(Math.Min(440, workArea.Height), Math.Min(700, workArea.Height - 48));
         ClientSize = new Size(formWidth, formHeight);
-        FormBorderStyle = FormBorderStyle.FixedDialog;
-        MinimumSize = new Size(Math.Min(620, formWidth), Math.Min(440, formHeight));
+        FormBorderStyle = FormBorderStyle.None;
+        MinimumSize = new Size(Math.Min(760, formWidth), Math.Min(520, formHeight));
         MaximizeBox = false;
         MinimizeBox = false;
         StartPosition = FormStartPosition.CenterScreen;
-        BackColor = Color.FromArgb(18, 24, 33);
-        ForeColor = Color.FromArgb(232, 237, 244);
+        BackColor = Color.FromArgb(244, 246, 243);
+        ForeColor = Color.FromArgb(14, 26, 39);
         Font = new Font("Segoe UI", 10);
         try
         {
@@ -84,57 +111,439 @@ internal sealed class SetupForm : Form
             if (iconStream is not null) Icon = new Icon(iconStream);
         }
         catch { }
-        var brandMark = new BrandMark { Location = new Point(28, 14), Size = new Size(48, 48) };
-        _header.Controls.Add(brandMark);
         _header.Controls.Add(new Label
         {
-            Text = "Laptop Status",
-            Location = new Point(89, 13),
-            Size = new Size(360, 28),
-            ForeColor = Color.FromArgb(241, 246, 252),
-            Font = new Font("Segoe UI Semibold", 16, FontStyle.Bold)
+            Text = "PENGATURAN LAPTOP STATUS",
+            Location = new Point(24, 0),
+            Size = new Size(420, 48),
+            TextAlign = ContentAlignment.MiddleLeft,
+            ForeColor = Color.FromArgb(196, 209, 219),
+            Font = new Font("Segoe UI", 9, FontStyle.Bold)
         });
-        _header.Controls.Add(new Label
+        _themeButton = new Button
         {
-            Text = "Pemantauan dan kendali laptop",
-            Location = new Point(91, 42),
-            Size = new Size(380, 21),
-            ForeColor = Color.FromArgb(167, 181, 197),
-            Font = new Font("Segoe UI", 9)
-        });
-        _header.Controls.Add(new Label
-        {
-            Text = "PT HAHA NASIONAL",
+            Text = "☼",
             Anchor = AnchorStyles.Top | AnchorStyles.Right,
-            Location = new Point(Math.Max(470, formWidth - 205), 28),
-            Size = new Size(170, 24),
-            TextAlign = ContentAlignment.MiddleRight,
-            ForeColor = Color.FromArgb(114, 228, 191),
-            Font = new Font("Segoe UI Semibold", 9, FontStyle.Bold)
-        });
+            Location = new Point(formWidth - 322, 5),
+            Size = new Size(38, 38),
+            FlatStyle = FlatStyle.Flat,
+            BackColor = Color.FromArgb(22, 39, 58),
+            ForeColor = Color.FromArgb(91, 224, 184),
+            Font = new Font("Segoe UI Symbol", 16),
+            Cursor = Cursors.Hand,
+            AccessibleName = "Ganti tema terang atau gelap"
+        };
+        _themeButton.FlatAppearance.BorderSize = 0;
+        _themeButton.Click += (_, _) => { _darkTheme = !_darkTheme; ApplyWizardTheme(); };
+        _header.Controls.Add(_themeButton);
+
+        _iconMotionTimer.Tick += (_, _) =>
+        {
+            _motionPhase = (_motionPhase + Math.Tau * _iconMotionTimer.Interval / 1800d) % Math.Tau;
+            _brandMark?.SetMotionPhase(_motionPhase);
+            foreach (var (marker, _, _) in _wizardSteps) marker.Invalidate();
+        };
+        FormClosed += (_, _) => { _iconMotionTimer.Stop(); _iconMotionTimer.Dispose(); _installStatusTimer.Stop(); };
+
         _installStatusTimer.Tick += (_, _) =>
         {
-            if (_installStatusLabel is null || _installStatusLabel.IsDisposed) return;
+            if (_webWizardActive) return;
             _installStatusIndex = (_installStatusIndex + 1) % ActiveInstallStatusMessages.Length;
-            _installStatusLabel.Text = ActiveInstallStatusMessages[_installStatusIndex];
+            if (_installStatusLabel is not null && !_installStatusLabel.IsDisposed)
+                _installStatusLabel.Text = ActiveInstallStatusMessages[_installStatusIndex];
         };
         _content.Controls.Add(_pageBody);
         _pageScrollBar.Scroll += (_, _) => _pageBody.Top = -_pageScrollBar.Value;
         _content.ClientSizeChanged += (_, _) => LayoutPageBody();
         _footer.Controls.Add(_footerButtons);
         _footer.SizeChanged += (_, _) => LayoutFooterButtons();
-        Controls.Add(_content);
-        Controls.Add(_pageScrollBar);
-        Controls.Add(_footer);
-        Controls.Add(_header);
-        Shown += (_, _) => LayoutPageBody();
+        _shell.Visible = false;
+        BackColor = Color.FromArgb(10, 19, 29);
+        _webWizard.Visible = true;
+        Controls.Add(_webWizard);
+        _webWizard.BringToFront();
+        Load += (_, _) => _ = InitializeWebWizardAsync();
+        Resize += (_, _) => PushWebWindowState();
+        // Warm the WebView environment while WinForms creates and paints the first window.
+        _webViewEnvironmentTask = CoreWebView2Environment.CreateAsync(null, _webViewUserDataDirectory);
+    }
+
+    private async Task InitializeWebWizardAsync()
+    {
+        try
+        {
+            // Prepare the local page before WebView2 starts so navigation can begin as soon as its core is ready.
+            ExtractWizardResources();
+            var environment = await (_webViewEnvironmentTask ??= CoreWebView2Environment.CreateAsync());
+            await _webWizard.EnsureCoreWebView2Async(environment);
+            _webWizard.DefaultBackgroundColor = Color.FromArgb(10, 19, 29);
+            _webWizard.CoreWebView2.Settings.AreDevToolsEnabled = false;
+            _webWizard.CoreWebView2.Settings.AreDefaultContextMenusEnabled = false;
+            _webWizard.CoreWebView2.Settings.IsStatusBarEnabled = false;
+            _webWizard.CoreWebView2.WebMessageReceived += WebWizardMessageReceived;
+            _webWizard.CoreWebView2.NavigationStarting += (_, e) =>
+            {
+                if (!e.Uri.StartsWith("https://laptopstatus-installer.local/", StringComparison.OrdinalIgnoreCase))
+                {
+                    e.Cancel = true;
+                    try { Process.Start(new ProcessStartInfo(e.Uri) { UseShellExecute = true }); } catch { }
+                }
+            };
+            _webWizard.CoreWebView2.SetVirtualHostNameToFolderMapping("laptopstatus-installer.local", _wizardFilesDirectory, CoreWebView2HostResourceAccessKind.Allow);
+            _webWizard.CoreWebView2.Navigate("https://laptopstatus-installer.local/Main.dc.html");
+        }
+        catch (Exception ex)
+        {
+            _webWizardReady = false;
+            _webWizardActive = false;
+            _webWizard.Visible = false;
+            var retry = MessageBox.Show(this,
+                $"Tampilan installer WebView gagal dimuat.\n\n{ex.Message}\n\nCoba muat lagi?",
+                "Laptop Status Setup", MessageBoxButtons.RetryCancel, MessageBoxIcon.Error);
+            if (retry == DialogResult.Retry && !IsDisposed)
+            {
+                _webViewEnvironmentTask = CoreWebView2Environment.CreateAsync(null, _webViewUserDataDirectory);
+                _webWizard.Visible = true;
+                _ = InitializeWebWizardAsync();
+            }
+            else if (!IsDisposed) Close();
+        }
+    }
+
+    private void ExtractWizardResources()
+    {
+        Directory.CreateDirectory(Path.Combine(_wizardFilesDirectory, "vendor"));
+        var resources = new (string Name, string Path)[]
+        {
+            ("LaptopStatus.Wizard.Main.dc.html", "Main.dc.html"),
+            ("LaptopStatus.Wizard.support.js", "support.js"),
+            ("LaptopStatus.Wizard.vendor.react.js", Path.Combine("vendor", "react.js")),
+            ("LaptopStatus.Wizard.vendor.react-dom.js", Path.Combine("vendor", "react-dom.js"))
+        };
+        foreach (var (name, relativePath) in resources)
+        {
+            using var source = Assembly.GetExecutingAssembly().GetManifestResourceStream(name)
+                ?? throw new FileNotFoundException($"Aset wizard tidak tersedia: {name}");
+            var target = Path.Combine(_wizardFilesDirectory, relativePath);
+            using var destination = File.Create(target);
+            source.CopyTo(destination);
+        }
+    }
+
+    private async void WebWizardMessageReceived(object? sender, CoreWebView2WebMessageReceivedEventArgs e)
+    {
+        try
+        {
+            using var document = JsonDocument.Parse(e.WebMessageAsJson);
+            var root = document.RootElement;
+            var action = root.TryGetProperty("action", out var actionValue) ? actionValue.GetString() : "";
+            switch (action)
+            {
+                case "ready":
+                    _webWizardReady = true;
+                    _webWizardActive = true;
+                    var path = JsonSerializer.Serialize(GetPreviousInstallPath() ?? _defaultInstallPath);
+                    await _webWizard.CoreWebView2.ExecuteScriptAsync($"window.LaptopStatusInstaller&&window.LaptopStatusInstaller.setInstallPath({path})");
+                    PushWebWindowState();
+                    break;
+                case "cancel": Close(); break;
+                case "browse":
+                    if (_installPath is null) _installPath = new TextBox { Text = GetPreviousInstallPath() ?? _defaultInstallPath };
+                    BrowseFolder();
+                    await _webWizard.CoreWebView2.ExecuteScriptAsync($"window.LaptopStatusInstaller&&window.LaptopStatusInstaller.setInstallPath({JsonSerializer.Serialize(_installPath.Text)})");
+                    break;
+                case "install":
+                    var requestedPath = root.TryGetProperty("path", out var installPathValue) ? installPathValue.GetString() : null;
+                    if (root.TryGetProperty("options", out var options)) SetWebInstallOptions(options, requestedPath);
+                    Install();
+                    break;
+                case "finish":
+                    var installDir = Registry.CurrentUser.OpenSubKey(@"Software\Microsoft\Windows\CurrentVersion\Uninstall\LaptopStatus")?.GetValue("InstallLocation") as string;
+                    if (_launchAfterInstall && !string.IsNullOrWhiteSpace(installDir)) await LaunchInstalledAppAsync(installDir);
+                    Close();
+                    break;
+                case "minimize": WindowState = FormWindowState.Minimized; break;
+                case "maximize": WindowState = WindowState == FormWindowState.Maximized ? FormWindowState.Normal : FormWindowState.Maximized; break;
+                case "close": Close(); break;
+                case "drag":
+                    NativeReleaseCapture();
+                    _ = SendWindowMessage(Handle, WmNcLeftButtonDown, HtCaption, IntPtr.Zero);
+                    break;
+                case "spacedesk": OpenSpacedeskDownloadPage(); break;
+            }
+        }
+        catch (Exception ex)
+        {
+            if (_webWizardReady)
+                await _webWizard.CoreWebView2.ExecuteScriptAsync($"window.LaptopStatusInstaller&&window.LaptopStatusInstaller.showError({JsonSerializer.Serialize(ex.Message)})");
+        }
+    }
+
+    private void SetWebInstallOptions(JsonElement options, string? requestedPath)
+    {
+        bool GetBool(string key, bool fallback) => options.TryGetProperty(key, out var value) && value.ValueKind is JsonValueKind.True or JsonValueKind.False ? value.GetBoolean() : fallback;
+        _installPath = new TextBox { Text = string.IsNullOrWhiteSpace(requestedPath) ? _defaultInstallPath : requestedPath };
+        _autoStart = new CheckBox { Checked = GetBool("autoStart", true) };
+        _launchNow = new CheckBox { Checked = GetBool("launchNow", true) };
+        _createDesktopShortcut = new CheckBox { Checked = GetBool("desktop", true) };
+        _installTailscale = new CheckBox { Checked = GetBool("tailscale", true) };
+        _installSpacedeskOption = new CheckBox { Checked = GetBool("spacedesk", false) };
+        _pinTaskbar = new CheckBox { Checked = GetBool("pinTaskbar", false) };
+        _pinStartMenu = new CheckBox { Checked = GetBool("pinStart", false) };
+    }
+
+    private void PushWebWindowState()
+    {
+        if (!_webWizardReady || IsDisposed || _webWizard.IsDisposed) return;
+        _ = _webWizard.CoreWebView2.ExecuteScriptAsync($"window.LaptopStatusInstaller&&window.LaptopStatusInstaller.setMaximized({(WindowState == FormWindowState.Maximized ? "true" : "false")})");
+    }
+
+    private void BuildStepRail()
+    {
+        _brandMark = new BrandMark { Location = new Point(24, 28), Size = new Size(44, 44) };
+        _brandMark.SetMotionPhase(_motionPhase);
+        _stepRail.Controls.Add(_brandMark);
+        _stepRail.Controls.Add(new Label
+        {
+            Text = "Laptop Status",
+            Location = new Point(78, 27),
+            Size = new Size(132, 26),
+            ForeColor = Color.FromArgb(241, 246, 252),
+            Font = new Font("Segoe UI Semibold", 14, FontStyle.Bold)
+        });
+        _stepRail.Controls.Add(new Label
+        {
+            Text = "Pemantauan dan kendali laptop",
+            Location = new Point(79, 52),
+            Size = new Size(132, 34),
+            ForeColor = Color.FromArgb(126, 146, 163),
+            Font = new Font("Segoe UI", 8.5f)
+        });
+
+        var steps = new[]
+        {
+            ("Selamat datang", "MULAI"),
+            ("Pilihan instalasi", "PILIHAN"),
+            ("Pemasangan", "PROSES"),
+            ("Selesai", "RAMPUNG")
+        };
+        for (var index = 0; index < steps.Length; index++)
+        {
+            var stepIndex = index;
+            var y = 150 + index * 72;
+            var marker = new Panel { Location = new Point(28, y), Size = new Size(36, 36), BackColor = Color.Transparent, Tag = stepIndex };
+            marker.Paint += (_, e) => PaintStepMarker(marker, e.Graphics, stepIndex);
+            var title = new Label
+            {
+                Text = steps[index].Item1,
+                Location = new Point(78, y + 1),
+                Size = new Size(132, 22),
+                ForeColor = Color.FromArgb(126, 146, 163),
+                Font = new Font("Segoe UI", 9.5f)
+            };
+            var note = new Label
+            {
+                Text = steps[index].Item2,
+                Location = new Point(79, y + 23),
+                Size = new Size(130, 17),
+                ForeColor = Color.FromArgb(126, 146, 163),
+                Font = new Font("Consolas", 7.5f)
+            };
+            _stepRail.Controls.Add(marker);
+            _stepRail.Controls.Add(title);
+            _stepRail.Controls.Add(note);
+            _wizardSteps.Add((marker, title, note));
+        }
+
+        _stepRail.Controls.Add(new Label
+        {
+            Text = $"PT HAHA NASIONAL\nINSTALLER · v{Assembly.GetExecutingAssembly().GetName().Version?.ToString(3)}",
+            Anchor = AnchorStyles.Bottom | AnchorStyles.Left,
+            Location = new Point(28, 0),
+            Size = new Size(180, 44),
+            ForeColor = Color.FromArgb(126, 146, 163),
+            Font = new Font("Consolas", 7.5f)
+        });
+        UpdateWizardProgress(0);
+    }
+
+    private void PaintStepMarker(Panel marker, Graphics graphics, int stepIndex)
+    {
+        graphics.SmoothingMode = SmoothingMode.AntiAlias;
+        var active = stepIndex == _activeWizardStep;
+        var done = stepIndex < _activeWizardStep;
+        var pulse = (Math.Sin(_motionPhase) + 1d) / 2d;
+        if (active)
+        {
+            using var glow = new Pen(Color.FromArgb((int)(12 + 40 * pulse), 91, 224, 184), 3f);
+            graphics.DrawEllipse(glow, 0.5f, 0.5f, marker.Width - 1f, marker.Height - 1f);
+        }
+        var color = active || done ? Color.FromArgb(91, 224, 184) : Color.FromArgb(42, 65, 83);
+        var bounds = new Rectangle(2, 2, marker.Width - 5, marker.Height - 5);
+        using (var fill = new SolidBrush(done ? Color.FromArgb(91, 224, 184) : Color.FromArgb(14, 26, 39)))
+            graphics.FillEllipse(fill, bounds);
+        using (var ringBackground = new Pen(Color.FromArgb(42, 65, 83), 2f))
+            graphics.DrawEllipse(ringBackground, bounds);
+        var progress = done ? 1f : active ? stepIndex == 2
+            ? Math.Clamp((_installStatusIndex + 1f) / ActiveInstallStatusMessages.Length, 0.12f, 0.9f)
+            : 0.48f : 0f;
+        if (progress > 0)
+        {
+            using var ringProgress = new Pen(Color.FromArgb(91, 224, 184), 2f) { StartCap = LineCap.Round, EndCap = LineCap.Round };
+            graphics.DrawArc(ringProgress, bounds, -90, 360f * progress);
+        }
+        var iconColor = done ? Color.FromArgb(7, 19, 28) : color;
+        using var icon = new Pen(iconColor, 1.55f) { StartCap = LineCap.Round, EndCap = LineCap.Round, LineJoin = LineJoin.Round };
+        var cx = marker.Width / 2f;
+        if (stepIndex == 0)
+        {
+            graphics.DrawRectangle(icon, cx - 6f, 11f, 12f, 8f);
+            graphics.DrawLine(icon, cx, 19.5f, cx, 23f);
+            graphics.DrawLine(icon, cx - 4.5f, 24.5f, cx + 4.5f, 24.5f);
+        }
+        else if (stepIndex == 1)
+        {
+            foreach (var y in new[] { 11f, 18f, 25f }) graphics.DrawLine(icon, cx - 6f, y, cx + 6f, y);
+            using var knob = new SolidBrush(iconColor);
+            graphics.FillEllipse(knob, cx - 3.5f, 9f, 4f, 4f);
+            graphics.FillEllipse(knob, cx + 1f, 16f, 4f, 4f);
+            graphics.FillEllipse(knob, cx - 2.5f, 23f, 4f, 4f);
+        }
+        else if (stepIndex == 2)
+        {
+            var bobPhase = _motionPhase * 1800d / 1100d;
+            var offset = active ? (float)(Math.Sin(bobPhase) * 1.5f) : 0f;
+            graphics.DrawLine(icon, cx, 9.5f + offset, cx, 20f + offset);
+            graphics.DrawLine(icon, cx, 20f + offset, cx - 4f, 16f + offset);
+            graphics.DrawLine(icon, cx, 20f + offset, cx + 4f, 16f + offset);
+            graphics.DrawLine(icon, cx - 5f, 25f, cx + 5f, 25f);
+        }
+        else
+        {
+            graphics.DrawLine(icon, cx - 5f, 18f, cx - 1f, 22f);
+            graphics.DrawLine(icon, cx - 1f, 22f, cx + 6f, 14f);
+        }
+    }
+
+    private int _activeWizardStep;
+
+    private void UpdateWizardProgress(int step)
+    {
+        _activeWizardStep = Math.Clamp(step, 0, 3);
+        foreach (var (marker, title, note) in _wizardSteps)
+        {
+            var index = (int)marker.Tag!;
+            var active = index == _activeWizardStep;
+            var done = index < _activeWizardStep;
+            title.ForeColor = active ? Color.FromArgb(231, 238, 243) : Color.FromArgb(126, 146, 163);
+            title.Font = new Font("Segoe UI", 9.5f, active ? FontStyle.Bold : FontStyle.Regular);
+            note.ForeColor = active ? Color.FromArgb(91, 224, 184) : Color.FromArgb(126, 146, 163);
+            if (done) note.Text = "SELESAI";
+            else note.Text = index switch { 0 => "MULAI", 1 => "PILIHAN", 2 => "PROSES", _ => "RAMPUNG" };
+            marker.Invalidate();
+        }
+    }
+
+    private Color PageBackground => _darkTheme ? Color.FromArgb(15, 26, 38) : Color.FromArgb(251, 252, 250);
+    private Color PageText => _darkTheme ? Color.FromArgb(230, 238, 243) : Color.FromArgb(14, 26, 39);
+    private Color PageMuted => _darkTheme ? Color.FromArgb(156, 176, 191) : Color.FromArgb(85, 99, 111);
+    private Color PageLine => _darkTheme ? Color.FromArgb(33, 50, 68) : Color.FromArgb(213, 220, 215);
+    private Color PageAccent => _darkTheme ? Color.FromArgb(91, 224, 184) : Color.FromArgb(10, 107, 85);
+
+    private void ApplyWizardTheme()
+    {
+        _content.BackColor = PageBackground;
+        _mainColumn.BackColor = PageBackground;
+        _pageBody.BackColor = PageBackground;
+        BackColor = PageBackground;
+        ForeColor = PageText;
+        if (_themeButton is not null)
+        {
+            _themeButton.Text = _darkTheme ? "☾" : "☼";
+            _themeButton.ForeColor = PageAccent;
+            _themeButton.BackColor = Color.FromArgb(22, 39, 58);
+        }
+
+        ApplyWizardThemeToPage(_pageBody);
+        foreach (Control control in _footerButtons.Controls)
+            if (control is Button button && button.Tag is bool primary) StyleWizardButton(button, primary);
+        UpdateWizardProgress(_activeWizardStep);
         LayoutPageBody();
-        ShowWelcome();
+    }
+
+    private void ApplyWizardThemeToPage(Control parent)
+    {
+        foreach (Control control in parent.Controls)
+        {
+            if (control is Panel stage && Equals(stage.Tag, "stage"))
+            {
+                stage.BackColor = _darkTheme ? Color.FromArgb(11, 21, 32) : Color.FromArgb(244, 246, 243);
+                stage.Invalidate();
+            }
+            else if (control is Panel card && Equals(card.Tag, "card"))
+            {
+                card.BackColor = _darkTheme ? Color.FromArgb(22, 39, 58) : Color.FromArgb(255, 255, 255);
+                card.ForeColor = PageText;
+                card.BorderStyle = BorderStyle.FixedSingle;
+            }
+            else if (control is Label label)
+            {
+                label.ForeColor = Equals(label.Tag, "muted") ? PageMuted : Equals(label.Tag, "accent") ? PageAccent : PageText;
+            }
+            else if (control is TextBox textBox)
+            {
+                textBox.BackColor = _darkTheme ? Color.FromArgb(11, 21, 32) : Color.White;
+                textBox.ForeColor = PageText;
+            }
+            else if (control is CheckBox checkBox)
+            {
+                checkBox.ForeColor = PageText;
+                checkBox.BackColor = Color.Transparent;
+            }
+            else if (control is Button button && button.Tag is bool primary)
+            {
+                StyleWizardButton(button, primary);
+            }
+            else if (control is Button otherButton)
+            {
+                otherButton.BackColor = _darkTheme ? Color.FromArgb(22, 39, 58) : Color.FromArgb(230, 236, 232);
+                otherButton.ForeColor = PageText;
+                otherButton.FlatAppearance.BorderColor = PageLine;
+            }
+            else if (control is ProgressBar progress)
+            {
+                progress.ForeColor = PageAccent;
+                progress.BackColor = _darkTheme ? Color.FromArgb(22, 39, 58) : Color.FromArgb(225, 232, 227);
+            }
+            else if (control is TableLayoutPanel table)
+                table.BackColor = Color.Transparent;
+            else if (control is FlowLayoutPanel flow)
+                flow.BackColor = Color.Transparent;
+            else if (control is Panel panel && !Equals(panel.Tag, "card"))
+                panel.BackColor = Color.Transparent;
+
+            ApplyWizardThemeToPage(control);
+        }
+    }
+
+    private void StyleWizardButton(Button button, bool primary)
+    {
+        var normal = primary
+            ? (_darkTheme ? Color.FromArgb(91, 224, 184) : Color.FromArgb(14, 26, 39))
+            : (_darkTheme ? Color.FromArgb(22, 39, 58) : Color.FromArgb(230, 236, 232));
+        var hover = primary
+            ? (_darkTheme ? Color.FromArgb(122, 235, 200) : Color.FromArgb(29, 51, 73))
+            : (_darkTheme ? Color.FromArgb(33, 50, 68) : Color.FromArgb(213, 220, 215));
+        button.BackColor = normal;
+        button.ForeColor = primary && !_darkTheme ? Color.White : PageText;
+        button.FlatAppearance.MouseDownBackColor = hover;
+        button.FlatAppearance.BorderColor = primary ? normal : PageLine;
     }
 
     private Label CreateLabel(string text, float size = 10, bool bold = false, Color? color = null)
     {
         var font = new Font("Segoe UI", size, bold ? FontStyle.Bold : FontStyle.Regular);
+        var role = color == Color.FromArgb(167, 181, 197) ? "muted" : color == Color.FromArgb(114, 228, 191) ? "accent" : "primary";
         return new Label
         {
             Text = text,
@@ -142,7 +551,8 @@ internal sealed class SetupForm : Form
             AutoEllipsis = false,
             UseMnemonic = false,
             TextAlign = ContentAlignment.TopLeft,
-            ForeColor = color ?? ForeColor,
+            ForeColor = role == "muted" ? PageMuted : role == "accent" ? PageAccent : PageText,
+            Tag = role,
             Font = font,
             Margin = new Padding(0, 0, 0, 8),
             MaximumSize = new Size(Math.Max(180, _pageBody.ClientSize.Width - _pageBody.Padding.Horizontal), 0)
@@ -167,7 +577,7 @@ internal sealed class SetupForm : Form
             Checked = isChecked,
             AutoSize = true,
             MaximumSize = new Size(Math.Max(180, _pageBody.ClientSize.Width - _pageBody.Padding.Horizontal - 36), 0),
-            ForeColor = ForeColor,
+            ForeColor = PageText,
             BackColor = Color.Transparent,
             Font = Font,
             Padding = new Padding(0, 4, 0, 4),
@@ -187,16 +597,16 @@ internal sealed class SetupForm : Form
             Padding = new Padding(16, 4, 16, 4),
             Margin = new Padding(8, 0, 0, 0),
             FlatStyle = FlatStyle.Flat,
-            BackColor = primary ? Color.FromArgb(53, 170, 135) : Color.FromArgb(38, 49, 65),
-            ForeColor = Color.White,
+            BackColor = primary ? Color.FromArgb(14, 26, 39) : Color.FromArgb(230, 236, 232),
+            ForeColor = primary ? Color.White : PageText,
             UseVisualStyleBackColor = false
         };
         button.FlatAppearance.BorderSize = 0;
         button.FlatAppearance.MouseDownBackColor = Color.FromArgb(39, 148, 119);
-        button.Tag = button.BackColor;
+        button.Tag = primary;
         button.Cursor = Cursors.Hand;
-        button.MouseEnter += (_, _) => AnimateButtonColor(button, primary ? Color.FromArgb(91, 204, 167) : Color.FromArgb(52, 69, 90));
-        button.MouseLeave += (_, _) => AnimateButtonColor(button, (Color)button.Tag);
+        button.MouseEnter += (_, _) => { };
+        button.MouseLeave += (_, _) => StyleWizardButton(button, primary);
         button.Click += click;
         _footerButtons.Controls.Add(button);
         LayoutFooterButtons();
@@ -223,7 +633,8 @@ internal sealed class SetupForm : Form
             AutoSizeMode = AutoSizeMode.GrowAndShrink,
             Padding = new Padding(18),
             Margin = new Padding(0, 0, 0, 16),
-            BackColor = Color.FromArgb(25, 35, 49),
+            BackColor = PageBackground,
+            Tag = "card",
             Width = Math.Max(240, _pageBody.ClientSize.Width - _pageBody.Padding.Horizontal),
             MinimumSize = new Size(Math.Max(240, _pageBody.ClientSize.Width - _pageBody.Padding.Horizontal), 0)
         };
@@ -242,6 +653,110 @@ internal sealed class SetupForm : Form
         card.Controls.Add(stack);
         _pageBody.Controls.Add(card);
         return stack;
+    }
+
+    private Panel CreateWelcomeStage()
+    {
+        var stage = new Panel
+        {
+            Height = 184,
+            Margin = new Padding(0, 8, 0, 18),
+            BackColor = PageBackground,
+            Tag = "stage"
+        };
+        stage.Paint += (_, e) =>
+        {
+            var graphics = e.Graphics;
+            graphics.SmoothingMode = SmoothingMode.AntiAlias;
+            var width = stage.ClientSize.Width;
+            var accent = _darkTheme ? Color.FromArgb(91, 224, 184) : Color.FromArgb(10, 107, 85);
+            var line = _darkTheme ? Color.FromArgb(58, 82, 102) : Color.FromArgb(159, 174, 166);
+            var panel = _darkTheme ? Color.FromArgb(5, 11, 17) : Color.FromArgb(14, 26, 39);
+            var screen = _darkTheme ? Color.FromArgb(11, 21, 32) : Color.FromArgb(251, 252, 250);
+            var muted = _darkTheme ? Color.FromArgb(143, 163, 178) : Color.FromArgb(85, 99, 111);
+            using var bg = new SolidBrush(_darkTheme ? Color.FromArgb(11, 21, 32) : Color.FromArgb(244, 246, 243));
+            graphics.Clear(bg.Color);
+            var laptopX = Math.Max(24, (int)(width * .12));
+            var laptopY = 18;
+            var laptopWidth = Math.Min(260, (int)(width * .46));
+            const int laptopHeight = 118;
+            using var laptop = new SolidBrush(panel);
+            using var panelBrush = new SolidBrush(screen);
+            using var outline = new Pen(line, 1.5f);
+            using var accentPen = new Pen(accent, 2.5f) { StartCap = LineCap.Round, EndCap = LineCap.Round, LineJoin = LineJoin.Round };
+            graphics.FillRectangle(laptop, laptopX, laptopY, laptopWidth, laptopHeight);
+            graphics.DrawRectangle(outline, laptopX, laptopY, laptopWidth, laptopHeight);
+            graphics.FillRectangle(panelBrush, laptopX + 10, laptopY + 10, laptopWidth - 20, laptopHeight - 24);
+            for (var row = 0; row < 3; row++)
+            {
+                using var dimPen = new Pen(Color.FromArgb(44, 67, 87), 5);
+                graphics.DrawLine(dimPen, laptopX + 24, laptopY + 29 + row * 12, laptopX + 88, laptopY + 29 + row * 12);
+                using var activePen = new Pen(accent, 5);
+                graphics.DrawLine(activePen, laptopX + 24, laptopY + 29 + row * 12, laptopX + 48 + row * 10, laptopY + 29 + row * 12);
+            }
+            var points = new[]
+            {
+                new Point(laptopX + 24, laptopY + 98), new Point(laptopX + 75, laptopY + 98),
+                new Point(laptopX + 92, laptopY + 82), new Point(laptopX + 105, laptopY + 109),
+                new Point(laptopX + 122, laptopY + 91), new Point(laptopX + 142, laptopY + 98),
+                new Point(laptopX + laptopWidth - 18, laptopY + 68)
+            };
+            graphics.DrawLines(accentPen, points);
+            graphics.FillPolygon(laptop, new[]
+            {
+                new Point(laptopX - 20, laptopY + laptopHeight + 2),
+                new Point(laptopX + laptopWidth + 20, laptopY + laptopHeight + 2),
+                new Point(laptopX + laptopWidth + 5, laptopY + laptopHeight + 15),
+                new Point(laptopX - 5, laptopY + laptopHeight + 15)
+            });
+            graphics.DrawLine(outline, laptopX - 20, laptopY + laptopHeight + 2, laptopX + laptopWidth + 20, laptopY + laptopHeight + 2);
+
+            var phoneWidth = 76;
+            var phoneHeight = 132;
+            var phoneX = width - phoneWidth - Math.Max(22, (int)(width * .12));
+            var phoneY = 12;
+            using var phone = new SolidBrush(_darkTheme ? Color.FromArgb(5, 11, 17) : Color.FromArgb(251, 252, 250));
+            using var phoneShape = CreateRoundedRectanglePath(new Rectangle(phoneX, phoneY, phoneWidth, phoneHeight), 14);
+            graphics.FillPath(phone, phoneShape);
+            graphics.DrawPath(outline, phoneShape);
+            using var rowBrush = new SolidBrush(_darkTheme ? Color.FromArgb(22, 39, 58) : Color.FromArgb(225, 232, 227));
+            for (var row = 0; row < 3; row++)
+            {
+                var y = phoneY + 30 + row * 29;
+                graphics.FillRectangle(rowBrush, phoneX + 10, y, phoneWidth - 20, 19);
+                using var dot = new SolidBrush(row == 0 ? accent : muted);
+                graphics.FillEllipse(dot, phoneX + 16, y + 6, 7, 7);
+                graphics.DrawLine(outline, phoneX + 29, y + 9, phoneX + phoneWidth - 16, y + 9);
+            }
+
+            using var linkPen = new Pen(accent, 1.6f) { DashPattern = new[] { 4f, 5f } };
+            var linkStart = new Point(laptopX + laptopWidth + 18, laptopY + 63);
+            var linkEnd = new Point(phoneX - 12, phoneY + 63);
+            if (linkEnd.X > linkStart.X) graphics.DrawLine(linkPen, linkStart, linkEnd);
+            using var caption = new Font("Consolas", 8f, FontStyle.Bold);
+            using var captionBrush = new SolidBrush(muted);
+            graphics.DrawString("WINDOWS", caption, captionBrush, laptopX + Math.Max(0, (laptopWidth - 54) / 2), 156);
+            graphics.DrawString("ANDROID", caption, captionBrush, phoneX + 8, 156);
+            if (linkEnd.X > linkStart.X)
+            {
+                using var accentBrush = new SolidBrush(accent);
+                graphics.DrawString("QR + TLS", caption, accentBrush, linkStart.X + 20, 50);
+            }
+        };
+        _pageBody.Controls.Add(stage);
+        return stage;
+    }
+
+    private static GraphicsPath CreateRoundedRectanglePath(Rectangle bounds, int radius)
+    {
+        var diameter = radius * 2;
+        var path = new GraphicsPath();
+        path.AddArc(bounds.X, bounds.Y, diameter, diameter, 180, 90);
+        path.AddArc(bounds.Right - diameter, bounds.Y, diameter, diameter, 270, 90);
+        path.AddArc(bounds.Right - diameter, bounds.Bottom - diameter, diameter, diameter, 0, 90);
+        path.AddArc(bounds.X, bounds.Bottom - diameter, diameter, diameter, 90, 90);
+        path.CloseFigure();
+        return path;
     }
 
     private void AddToCard(FlowLayoutPanel card, Control control)
@@ -358,7 +873,7 @@ internal sealed class SetupForm : Form
             _pageBody.Controls.Remove(control);
             control.Dispose();
         }
-        _pageBody.Padding = new Padding(28, 24, 28, 28);
+        _pageBody.Padding = new Padding(34, 28, 34, 30);
         _pageScrollBar.Value = 0;
         _pageScrollBar.Visible = false;
         _pageBody.Top = 0;
@@ -368,32 +883,16 @@ internal sealed class SetupForm : Form
     private void AnimateButtonColor(Button button, Color target)
     {
         if (_buttonColorAnimations.Remove(button, out var previous)) { previous.Stop(); previous.Dispose(); }
-        var initial = button.BackColor;
-        var started = Stopwatch.StartNew();
-        var timer = new Timer { Interval = 15 };
-        _buttonColorAnimations[button] = timer;
-        timer.Tick += (_, _) =>
-        {
-            var progress = Math.Min(1d, started.Elapsed.TotalMilliseconds / 150d);
-            var eased = 1d - Math.Pow(1d - progress, 3d);
-            button.BackColor = Color.FromArgb(
-                (int)(initial.R + (target.R - initial.R) * eased),
-                (int)(initial.G + (target.G - initial.G) * eased),
-                (int)(initial.B + (target.B - initial.B) * eased));
-            if (progress < 1d) return;
-            timer.Stop();
-            timer.Dispose();
-            if (_buttonColorAnimations.TryGetValue(button, out var active) && ReferenceEquals(active, timer))
-                _buttonColorAnimations.Remove(button);
-        };
-        timer.Start();
+        button.BackColor = target;
     }
 
     private void ShowWelcome()
     {
         ResetPage();
+        AddLabel("LANGKAH 1 / 4", 8.5f, true, Color.FromArgb(114, 228, 191));
         AddLabel("Selamat datang", 23, true);
         AddLabel("Pasang Laptop Status di perangkat Windows ini.", 11, false, Color.FromArgb(167, 181, 197));
+        CreateWelcomeStage();
 
         var overview = CreateCard();
         AddCardLabel(overview, "Sebelum memulai", 13, true);
@@ -407,11 +906,19 @@ internal sealed class SetupForm : Form
         AddButton("Batal", (_, _) => Close());
         AddButton("Berikutnya", (_, _) => ShowOptions(), primary: true);
         LayoutPageBody();
+        UpdateWizardProgress(0);
+        ApplyWizardTheme();
     }
 
     private void ShowOptions()
     {
+        if (_webWizardActive && _webWizardReady)
+        {
+            _ = _webWizard.CoreWebView2.ExecuteScriptAsync("window.LaptopStatusInstaller&&window.LaptopStatusInstaller.showError('Periksa kembali pilihan instalasi lalu coba lagi.')");
+            return;
+        }
         ResetPage();
+        AddLabel("LANGKAH 2 / 4", 8.5f, true, Color.FromArgb(114, 228, 191));
         AddLabel("Pilihan instalasi", 21, true);
         AddLabel("Atur lokasi aplikasi dan perilaku awalnya.", 10, false, Color.FromArgb(167, 181, 197));
 
@@ -491,6 +998,8 @@ internal sealed class SetupForm : Form
         AddButton("Instal", (_, _) => Install(), primary: true);
         AddButton("Batal", (_, _) => Close());
         LayoutPageBody();
+        UpdateWizardProgress(1);
+        ApplyWizardTheme();
     }
 
     private string? GetPreviousInstallPath()
@@ -527,11 +1036,19 @@ internal sealed class SetupForm : Form
                 var choice = MessageBox.Show(this,
                     $"Folder ini sudah berisi berkas Laptop Status:\n\n{names}\n\nTimpa berkas aplikasi lama dengan versi baru?",
                     "Konfirmasi timpa aplikasi", MessageBoxButtons.YesNo, MessageBoxIcon.Warning, MessageBoxDefaultButton.Button2);
-                if (choice != DialogResult.Yes) return;
+                if (choice != DialogResult.Yes)
+                {
+                    if (_webWizardActive && _webWizardReady)
+                        _ = _webWizard.CoreWebView2.ExecuteScriptAsync("window.LaptopStatusInstaller&&window.LaptopStatusInstaller.showError('Pemasangan dibatalkan. Anda bisa mengubah folder atau lanjutkan lagi.')");
+                    return;
+                }
                 if (IsApplicationRunningFrom(exePath))
                 {
-                    MessageBox.Show(this, "Laptop Status sedang berjalan dari folder ini. Keluar melalui ikon Laptop Status di area notifikasi, lalu jalankan installer lagi.",
-                        "Tutup aplikasi sebelum memperbarui", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    const string message = "Laptop Status sedang berjalan dari folder ini. Keluar melalui ikon Laptop Status di area notifikasi, lalu jalankan installer lagi.";
+                    if (_webWizardActive && _webWizardReady)
+                        _ = _webWizard.CoreWebView2.ExecuteScriptAsync($"window.LaptopStatusInstaller&&window.LaptopStatusInstaller.showError({JsonSerializer.Serialize(message)})");
+                    else
+                        MessageBox.Show(this, message, "Tutup aplikasi sebelum memperbarui", MessageBoxButtons.OK, MessageBoxIcon.Information);
                     return;
                 }
             }
@@ -549,11 +1066,13 @@ internal sealed class SetupForm : Form
             _startPinRequested = pinStartMenu;
             ShowInstalling();
             await Task.Run(() => ExtractAndInstallFiles(destination));
+            UpdateWebProgress(52);
             await Task.Run(() =>
             {
                 if (installTailscale) InstallTailscaleIfNeeded();
                 ConfigureConnectionFirewallRules(exePath);
             });
+            UpdateWebProgress(83);
 
             ConfigureAutoStart(exePath, autoStart);
             var shortcutResult = CreateShortcuts(destination, autoStart, createDesktopShortcut, pinTaskbar, pinStartMenu);
@@ -561,14 +1080,20 @@ internal sealed class SetupForm : Form
             _taskbarPinSucceeded = shortcutResult.TaskbarPinSucceeded;
             _startPinSucceeded = shortcutResult.StartPinSucceeded;
             RegisterUninstall(destination);
+            UpdateWebProgress(95);
             ShowFinished();
         }
         catch (Exception ex)
         {
             _installStatusTimer.Stop();
             UseWaitCursor = false;
-            MessageBox.Show(this, ex.Message, "Instalasi gagal", MessageBoxButtons.OK, MessageBoxIcon.Error);
-            ShowOptions();
+            if (_webWizardActive && _webWizardReady)
+                _ = _webWizard.CoreWebView2.ExecuteScriptAsync($"window.LaptopStatusInstaller&&window.LaptopStatusInstaller.showError({JsonSerializer.Serialize(ex.Message)})");
+            else
+            {
+                MessageBox.Show(this, ex.Message, "Instalasi gagal", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                ShowOptions();
+            }
         }
     }
 
@@ -795,7 +1320,16 @@ internal sealed class SetupForm : Form
 
     private void ShowInstalling()
     {
+        if (_webWizardActive && _webWizardReady)
+        {
+            UseWaitCursor = true;
+            _installStatusIndex = 0;
+            _ = _webWizard.CoreWebView2.ExecuteScriptAsync("window.LaptopStatusInstaller&&window.LaptopStatusInstaller.setInstallProgress(8)");
+            UpdateWizardProgress(2);
+            return;
+        }
         ResetPage();
+        AddLabel("LANGKAH 3 / 4", 8.5f, true, Color.FromArgb(114, 228, 191));
         AddLabel("Sedang memasang", 22, true);
         AddLabel("Tunggu sebentar sementara berkas dan pengaturan disiapkan.", 10, false, Color.FromArgb(167, 181, 197));
         var progressCard = CreateCard();
@@ -816,7 +1350,15 @@ internal sealed class SetupForm : Form
         AddCardLabel(progressCard, "Jangan tutup wizard sampai pengaturan selesai.", 9, false, Color.FromArgb(167, 181, 197));
         UseWaitCursor = true;
         LayoutPageBody();
+        UpdateWizardProgress(2);
+        ApplyWizardTheme();
         _installStatusTimer.Start();
+    }
+
+    private void UpdateWebProgress(double progress)
+    {
+        if (!_webWizardActive || !_webWizardReady) return;
+        _ = _webWizard.CoreWebView2.ExecuteScriptAsync($"window.LaptopStatusInstaller&&window.LaptopStatusInstaller.setInstallProgress({Math.Clamp(progress, 0, 100).ToString(System.Globalization.CultureInfo.InvariantCulture)})");
     }
 
     private static void ConfigureAutoStart(string exePath, bool enabled)
@@ -984,7 +1526,7 @@ internal sealed class SetupForm : Form
     {
         using var key = Registry.CurrentUser.CreateSubKey(@"Software\Microsoft\Windows\CurrentVersion\Uninstall\LaptopStatus", writable: true);
         key.SetValue("DisplayName", "Laptop Status");
-        key.SetValue("DisplayVersion", "2.11.31");
+        key.SetValue("DisplayVersion", "2.11.38");
         key.SetValue("Publisher", "PT HAHA NASIONAL");
         key.SetValue("InstallLocation", installDir);
         key.SetValue("UninstallString", "powershell.exe -NoProfile -ExecutionPolicy Bypass -File \"" + Path.Combine(installDir, "Uninstall-LaptopStatus.ps1") + "\"");
@@ -992,7 +1534,19 @@ internal sealed class SetupForm : Form
 
     private void ShowFinished()
     {
+        if (_webWizardActive && _webWizardReady)
+        {
+            _installStatusTimer.Stop();
+            UseWaitCursor = false;
+            var taskbar = _taskbarPinRequested ? _taskbarPinSucceeded ? "Taskbar berhasil disematkan." : "Sematkan aplikasi lewat menu Start bila Windows menolak." : null;
+            var start = _startPinRequested ? _startPinSucceeded ? "Pintasan menu Start berhasil disematkan." : "Sematkan aplikasi manual dari menu Start bila Windows menolak." : null;
+            var payload = JsonSerializer.Serialize(new { desktop = _desktopShortcutCreated, taskbar, start, spacedesk = _installSpacedeskOptionSelected });
+            _ = _webWizard.CoreWebView2.ExecuteScriptAsync($"window.LaptopStatusInstaller&&window.LaptopStatusInstaller.finishInstall({payload})");
+            UpdateWizardProgress(3);
+            return;
+        }
         ResetPage();
+        AddLabel("LANGKAH 4 / 4", 8.5f, true, Color.FromArgb(114, 228, 191));
         AddLabel("Instalasi selesai", 22, true);
         AddLabel("Laptop Status sudah dipasang di perangkat ini.", 11, false, Color.FromArgb(167, 181, 197));
 
@@ -1034,6 +1588,8 @@ internal sealed class SetupForm : Form
         }, primary: true);
         UseWaitCursor = false;
         LayoutPageBody();
+        UpdateWizardProgress(3);
+        ApplyWizardTheme();
     }
 
     private static void OpenSpacedeskDownloadPage()
@@ -1136,10 +1692,18 @@ internal sealed class SetupForm : Form
 
 internal sealed class BrandMark : Control
 {
+    private double _motionPhase;
+
     public BrandMark()
     {
         SetStyle(ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer | ControlStyles.UserPaint | ControlStyles.SupportsTransparentBackColor, true);
         BackColor = Color.Transparent;
+    }
+
+    public void SetMotionPhase(double phase)
+    {
+        _motionPhase = phase;
+        Invalidate();
     }
 
     protected override void OnPaint(PaintEventArgs e)
@@ -1168,7 +1732,10 @@ internal sealed class BrandMark : Control
         e.Graphics.DrawLine(mint, 21, 35, 21, 38);
         e.Graphics.DrawLine(mint, 27, 35, 27, 38);
         e.Graphics.DrawLine(mint, 16, 40, 32, 40);
-        using var dot = new SolidBrush(Color.FromArgb(255, 114, 228, 191));
+        var pulse = (Math.Sin(_motionPhase) + 1d) / 2d;
+        using var dotGlow = new SolidBrush(Color.FromArgb((int)(22 + pulse * 48), 114, 228, 191));
+        e.Graphics.FillEllipse(dotGlow, 32.5f, 5.5f, 10, 10);
+        using var dot = new SolidBrush(Color.FromArgb((int)(175 + pulse * 80), 114, 228, 191));
         e.Graphics.FillEllipse(dot, 34, 7, 7, 7);
         e.Graphics.ResetTransform();
     }

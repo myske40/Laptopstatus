@@ -15,6 +15,8 @@
         <SolidColorBrush x:Key="AppGridSelectedBrush" Color="#29473F" />
         <SolidColorBrush x:Key="AppScrollTrackBrush" Color="#101720" />
         <SolidColorBrush x:Key="AppScrollThumbBrush" Color="#465565" />
+        <SolidColorBrush x:Key="AppScrollThumbHoverBrush" Color="#66798B" />
+        <SolidColorBrush x:Key="AppScrollThumbActiveBrush" Color="#72E4BF" />
 
         <!-- Kurva gerak iOS: cubic-bezier(0.32, 0.72, 0, 1). Pakai KeySpline ini di semua Storyboard baru. -->
         <KeySpline x:Key="IosSpline" ControlPoint1="0.32,0.72" ControlPoint2="0,1" />
@@ -364,24 +366,24 @@
             <Setter Property="SnapsToDevicePixels" Value="True" />
         </Style>
 
-        <!-- Slim dark scrollbars replace the bright OS default in long panels and dropdowns. -->
+        <!-- Quiet, slim scrollbars for every native Windows panel and dropdown. -->
         <Style TargetType="{x:Type ScrollBar}">
-            <Setter Property="Background" Value="{StaticResource AppScrollTrackBrush}" />
-            <Setter Property="Width" Value="12" />
-            <Setter Property="Height" Value="12" />
+            <Setter Property="Background" Value="{DynamicResource AppScrollTrackBrush}" />
+            <Setter Property="Width" Value="10" />
+            <Setter Property="Height" Value="10" />
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="{x:Type ScrollBar}">
-                        <Grid Background="{TemplateBinding Background}" SnapsToDevicePixels="True">
+                        <Grid Background="{DynamicResource AppScrollTrackBrush}" SnapsToDevicePixels="True">
                             <Track x:Name="PART_Track" IsDirectionReversed="True">
                                 <Track.Thumb>
                                     <Thumb>
                                         <Thumb.Template>
                                             <ControlTemplate TargetType="{x:Type Thumb}">
-                                                <Border x:Name="ThumbChrome" Background="#465565" CornerRadius="6" Margin="2" />
+                                                <Border x:Name="ThumbChrome" Background="{DynamicResource AppScrollThumbBrush}" CornerRadius="5" Margin="3" />
                                                 <ControlTemplate.Triggers>
-                                                    <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="ThumbChrome" Property="Background" Value="#66798B" /></Trigger>
-                                                    <Trigger Property="IsDragging" Value="True"><Setter TargetName="ThumbChrome" Property="Background" Value="#72E4BF" /></Trigger>
+                                                    <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="ThumbChrome" Property="Background" Value="{DynamicResource AppScrollThumbHoverBrush}" /></Trigger>
+                                                    <Trigger Property="IsDragging" Value="True"><Setter TargetName="ThumbChrome" Property="Background" Value="{DynamicResource AppScrollThumbActiveBrush}" /></Trigger>
                                                 </ControlTemplate.Triggers>
                                             </ControlTemplate>
                                         </Thumb.Template>
@@ -397,12 +399,12 @@
                         </Grid>
                         <ControlTemplate.Triggers>
                             <Trigger Property="Orientation" Value="Horizontal">
-                                <Setter Property="Height" Value="12" />
+                                <Setter Property="Height" Value="10" />
                                 <Setter Property="Width" Value="Auto" />
                                 <Setter TargetName="PART_Track" Property="IsDirectionReversed" Value="False" />
                             </Trigger>
                             <Trigger Property="Orientation" Value="Vertical">
-                                <Setter Property="Width" Value="12" />
+                                <Setter Property="Width" Value="10" />
                                 <Setter Property="Height" Value="Auto" />
                             </Trigger>
                         </ControlTemplate.Triggers>

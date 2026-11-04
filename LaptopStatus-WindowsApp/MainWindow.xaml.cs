@@ -22,6 +22,7 @@ using System.Windows.Data;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
 using System.Windows.Media.Effects;
+using System.Windows.Shell;
 using System.Windows.Threading;
 using System.Runtime.InteropServices;
 using System.Windows.Input;
@@ -88,6 +89,7 @@ namespace LaptopStatus
         private List<PairedDevice> _pairedDevices = new();
         private double _cpu, _ram;
         private HardwareSnapshot _hardwareSnapshot = new(null, null, "", Array.Empty<GpuSnapshot>());
+        private DateTime _lastClaudeStatePushUtc = DateTime.MinValue;
         private string _hardwareCardsSignature = "";
         private HardwareMeterControls? _cpuHardwareMeters;
         private readonly List<HardwareMeterControls> _gpuHardwareMeters = new();
@@ -131,6 +133,8 @@ namespace LaptopStatus
         private readonly ConcurrentDictionary<string, RemoteShellSession> _remoteShellSessions = new(StringComparer.Ordinal);
         private bool _motionAnimationsEnabled = true;
         private bool _classicThemeEnabled;
+        private bool _claudeStyleEnabled = true;
+        private bool _claudeWebViewReady;
         private bool _automaticDualRouteEnabled = true;
         private bool _connectionChimesEnabled = true;
         private bool _androidJokeNotificationEnabled;
@@ -158,6 +162,16 @@ namespace LaptopStatus
 
         private sealed record HardwareMeterControls(TextBlock FirstLabel, TextBlock FirstValue, ProgressBar FirstBar, TextBlock SecondLabel, TextBlock SecondValue, ProgressBar SecondBar);
         private sealed record ScheduledRoutine(int Index, string Name, string Action, string Time, string Days, bool Enabled, string LastRunDate);
+
+        [DllImport("user32.dll", EntryPoint = "ReleaseCapture", SetLastError = true)]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        private static extern bool NativeReleaseCapture();
+
+        [DllImport("user32.dll", EntryPoint = "SendMessageW", CharSet = CharSet.Unicode, ExactSpelling = true, SetLastError = true)]
+        private static extern IntPtr SendWindowMessage(IntPtr handle, int message, IntPtr wParam, IntPtr lParam);
+
+        private const int WmNcLeftButtonDown = 0x00A1;
+        private static readonly IntPtr HtCaption = new IntPtr(2);
 
         [DllImport("shell32.dll", ExactSpelling = true)]
         private static extern void DragAcceptFiles(IntPtr hwnd, [MarshalAs(UnmanagedType.Bool)] bool accept);
@@ -187,6 +201,17 @@ namespace LaptopStatus
         {
             _resumingScheduledPower = resumeScheduledPower;
             InitializeComponent();
+            var workArea = SystemParameters.WorkArea;
+            var widthLimit = Math.Max(480, workArea.Width - 32);
+            var heightLimit = Math.Max(360, workArea.Height - 32);
+            MinWidth = Math.Min(760, widthLimit);
+            MinHeight = Math.Min(480, heightLimit);
+            MaxWidth = widthLimit;
+            MaxHeight = heightLimit;
+            Width = Math.Min(1060, widthLimit);
+            Height = Math.Min(700, heightLimit);
+            WindowStartupLocation = WindowStartupLocation.CenterScreen;
+            Loaded += InitializeClaudeWebViewAsync;
             LoadWindowsHistory();
             SourceInitialized += EnableShellFileDrop;
             LoadAppearanceSettings();
@@ -194,11 +219,13 @@ namespace LaptopStatus
             _loadingAppearanceSettings = true;
             MotionAnimationsToggle.IsChecked = _motionAnimationsEnabled;
             ClassicThemeToggle.IsChecked = _classicThemeEnabled;
+            ClaudeStyleToggle.IsChecked = _claudeStyleEnabled;
             AutomaticDualRouteToggle.IsChecked = _automaticDualRouteEnabled;
             ConnectionChimeToggle.IsChecked = _connectionChimesEnabled;
             AndroidJokeNotificationToggle.IsChecked = _androidJokeNotificationEnabled;
             _loadingAppearanceSettings = false;
             ApplyClassicTheme();
+            UpdateClaudeWindowChrome();
             RemoveRetiredAndroidAppJokeData();
             TryDeleteCloudflareRuntimeToken();
             DependencyPropertyDescriptor.FromProperty(TextBlock.TextProperty, typeof(TextBlock))?.AddValueChanged(ConnectionInfo, (_, _) => AnimateConnectionInfo());
@@ -249,7 +276,7 @@ namespace LaptopStatus
             _hardwareTelemetryTask = Task.Run(() => new HardwareTelemetry());
             try { _applicationIcon = System.Drawing.Icon.ExtractAssociatedIcon(Environment.ProcessPath ?? Process.GetCurrentProcess().MainModule?.FileName ?? ""); }
             catch { _applicationIcon = null; }
-            _timer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(2) };
+            _timer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(5) };
             _timer.Tick += (_, _) => RefreshStats();
             _timer.Start();
             _scheduledPowerTimer.Tick += (_, _) => { if (!CheckScheduledPower()) CheckScheduledRoutines(); };
@@ -706,12 +733,14 @@ namespace LaptopStatus
             if (!TryNormalizePublicHostname(CloudflareHostnameBox.Text, out var hostname))
             {
                 CloudflareTunnelStatusText.Text = "Masukkan hostname HTTPS Cloudflare yang valid.";
+                _ = PushClaudeNoticeAsync(CloudflareTunnelStatusText.Text);
                 return;
             }
             if (token.Length < 32 || token.Any(char.IsWhiteSpace))
             {
                 CloudflareTunnelStatusText.Text = "Token tunnel tampaknya belum lengkap. Salin token dari perintah cloudflared di dashboard.";
                 CloudflareTokenBox.Clear();
+                _ = PushClaudeNoticeAsync(CloudflareTunnelStatusText.Text);
                 return;
             }
 
@@ -745,6 +774,8 @@ namespace LaptopStatus
                 if (tokenBytes is not null) CryptographicOperations.ZeroMemory(tokenBytes);
                 if (protectedBytes is not null) CryptographicOperations.ZeroMemory(protectedBytes);
                 SaveCloudflareTunnelButton.IsEnabled = true;
+                _ = PushClaudeNoticeAsync(CloudflareTunnelStatusText.Text);
+                _ = PushClaudeStateAsync();
             }
         }
 
@@ -1262,7 +1293,7 @@ namespace LaptopStatus
                     ScreenAccessStatus.Text = "Akses dengan password dimatikan. Permintaan layar kembali memerlukan persetujuan di laptop.";
                 }
                 catch (Exception ex) { ScreenAccessStatus.Text = $"Pengaturan tidak tersimpan: {ex.Message}"; }
-                finally { SaveScreenAccessButton.IsEnabled = true; }
+                finally { SaveScreenAccessButton.IsEnabled = true; _ = PushClaudeNoticeAsync(ScreenAccessStatus.Text); _ = PushClaudeStateAsync(); }
                 return;
             }
 
@@ -1271,6 +1302,7 @@ namespace LaptopStatus
             {
                 ScreenAccessStatus.Text = "Buat password khusus minimal 3 karakter tanpa karakter kontrol.";
                 ScreenAccessPasswordBox.Clear();
+                _ = PushClaudeNoticeAsync(ScreenAccessStatus.Text);
                 return;
             }
 
@@ -1299,6 +1331,8 @@ namespace LaptopStatus
             {
                 ScreenAccessPasswordBox.Clear();
                 SaveScreenAccessButton.IsEnabled = true;
+                _ = PushClaudeNoticeAsync(ScreenAccessStatus.Text);
+                _ = PushClaudeStateAsync();
             }
         }
 
@@ -1573,6 +1607,7 @@ namespace LaptopStatus
             }
             catch { }
             RenderWindowsHistory();
+            _ = PushClaudeHistoryAsync();
         }
 
         private static string GetHistoryCategory(string text)
@@ -1705,6 +1740,8 @@ namespace LaptopStatus
             }
             else if (_battery is >= 25)
                 _batteryLowHistoryRecorded = false;
+
+            PushClaudeTelemetry();
 
             var lastAndroidStatus = Interlocked.Read(ref _lastAndroidStatusUtcMs);
             if (_trayAndroidState == "connected" && lastAndroidStatus > 0
@@ -1860,9 +1897,14 @@ namespace LaptopStatus
                 if (settings is null) return;
                 _motionAnimationsEnabled = settings.MotionAnimationsEnabled;
                 _classicThemeEnabled = settings.ClassicThemeEnabled;
+                _claudeStyleEnabled = settings.NewUiDefaultApplied == true
+                    ? settings.ClaudeStyleEnabled ?? true
+                    : true;
+                if (_claudeStyleEnabled) _classicThemeEnabled = false;
                 _automaticDualRouteEnabled = settings.AutomaticDualRouteEnabled ?? true;
                 _connectionChimesEnabled = settings.ConnectionChimesEnabled ?? true;
                 _androidJokeNotificationEnabled = settings.AndroidJokeNotificationEnabled ?? false;
+                if (settings.NewUiDefaultApplied != true) SaveAppearanceSettings();
             }
             catch { }
         }
@@ -1874,7 +1916,7 @@ namespace LaptopStatus
                 Directory.CreateDirectory(Path.GetDirectoryName(_appearanceSettingsPath)!);
                 File.WriteAllText(_appearanceSettingsPath, JsonSerializer.Serialize(new AppearanceSettings(
                     _motionAnimationsEnabled, _classicThemeEnabled, _automaticDualRouteEnabled, _connectionChimesEnabled,
-                    _androidJokeNotificationEnabled)));
+                    _androidJokeNotificationEnabled, _claudeStyleEnabled, NewUiDefaultApplied: true)));
             }
             catch { }
         }
@@ -1882,11 +1924,287 @@ namespace LaptopStatus
         private void AppAppearanceToggle_Changed(object sender, RoutedEventArgs e)
         {
             if (_loadingAppearanceSettings) return;
+            if (sender == ClaudeStyleToggle && ClaudeStyleToggle.IsChecked == true)
+            {
+                _loadingAppearanceSettings = true;
+                ClassicThemeToggle.IsChecked = false;
+                _loadingAppearanceSettings = false;
+            }
+            else if (sender == ClassicThemeToggle && ClassicThemeToggle.IsChecked == true)
+            {
+                _loadingAppearanceSettings = true;
+                ClaudeStyleToggle.IsChecked = false;
+                _loadingAppearanceSettings = false;
+            }
             _motionAnimationsEnabled = MotionAnimationsToggle.IsChecked == true;
             _classicThemeEnabled = ClassicThemeToggle.IsChecked == true;
+            _claudeStyleEnabled = ClaudeStyleToggle.IsChecked == true;
             _trayIconAnimator.SetMotionEnabled(MotionAnimationsEnabled);
             SaveAppearanceSettings();
             ApplyClassicTheme();
+            ClaudeWebView.Visibility = _claudeStyleEnabled ? Visibility.Visible : Visibility.Collapsed;
+            MainContent.Visibility = _claudeStyleEnabled ? Visibility.Collapsed : Visibility.Visible;
+            UpdateClaudeWindowChrome();
+            if (sender == ClaudeStyleToggle) System.Media.SystemSounds.Asterisk.Play();
+        }
+
+        private void UpdateClaudeWindowChrome()
+        {
+            if (_claudeStyleEnabled)
+            {
+                WindowChrome.SetWindowChrome(this, new WindowChrome
+                {
+                    CaptionHeight = 0,
+                    ResizeBorderThickness = new Thickness(7),
+                    GlassFrameThickness = new Thickness(0),
+                    CornerRadius = new CornerRadius(0),
+                    UseAeroCaptionButtons = false
+                });
+                WindowStyle = WindowStyle.None;
+            }
+            else
+            {
+                WindowChrome.SetWindowChrome(this, null);
+                WindowStyle = WindowStyle.SingleBorderWindow;
+            }
+        }
+
+        private async void InitializeClaudeWebViewAsync(object sender, RoutedEventArgs e)
+        {
+            Loaded -= InitializeClaudeWebViewAsync;
+            try
+            {
+                var userData = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "LaptopStatus", "WebView2");
+                var environment = await Microsoft.Web.WebView2.Core.CoreWebView2Environment.CreateAsync(userDataFolder: userData);
+                await ClaudeWebView.EnsureCoreWebView2Async(environment);
+                ClaudeWebView.CoreWebView2.Settings.AreDevToolsEnabled = false;
+                ClaudeWebView.CoreWebView2.Settings.AreDefaultContextMenusEnabled = false;
+                ClaudeWebView.CoreWebView2.Settings.IsStatusBarEnabled = false;
+                ClaudeWebView.CoreWebView2.WebMessageReceived += ClaudeWebView_WebMessageReceived;
+                var htmlPath = Path.Combine(AppContext.BaseDirectory, "Assets", "StatusPerangkatClaude.html");
+                if (!File.Exists(htmlPath)) throw new FileNotFoundException("Aset tampilan Claude tidak ditemukan.", htmlPath);
+                ClaudeWebView.CoreWebView2.NavigationCompleted += (_, _) =>
+                {
+                    _claudeWebViewReady = true;
+                    ClaudeWebView.Visibility = _claudeStyleEnabled ? Visibility.Visible : Visibility.Collapsed;
+                    MainContent.Visibility = _claudeStyleEnabled ? Visibility.Collapsed : Visibility.Visible;
+                    UpdateClaudeWindowChrome();
+                    PushClaudeTelemetry();
+                    _ = PushClaudeProcessesAsync();
+                    _ = PushClaudeHistoryAsync();
+                    _ = PushClaudeStateAsync();
+                };
+                ClaudeWebView.Source = new Uri(htmlPath);
+            }
+            catch (Exception ex)
+            {
+                ClaudeStyleToggle.IsChecked = false;
+                _claudeStyleEnabled = false;
+                SaveAppearanceSettings();
+                MainContent.Visibility = Visibility.Visible;
+                ClaudeWebView.Visibility = Visibility.Collapsed;
+                UpdateClaudeWindowChrome();
+                SetConnectionInfo("Gaya Claude tidak dapat dibuka: " + ex.Message);
+            }
+        }
+
+        private void PushClaudeTelemetry()
+        {
+            if (!_claudeWebViewReady || ClaudeWebView.CoreWebView2 is null) return;
+            var cpu = double.IsFinite(_cpu) ? Math.Clamp((int)Math.Round(_cpu), 0, 100) : 0;
+            var ram = double.IsFinite(_ram) ? Math.Clamp((int)Math.Round(_ram), 0, 100) : 0;
+            var battery = _battery.HasValue ? Math.Clamp(_battery.Value, 0, 100) : -1;
+            var payload = JsonSerializer.Serialize(new { cpu, ram, battery });
+            _ = ClaudeWebView.CoreWebView2.ExecuteScriptAsync($"window.laptopStatusUpdate && window.laptopStatusUpdate({payload})");
+            // Detailed device state contains hardware logos and drive information. Send it
+            // less often than live gauges so WebView does not rebuild those cards every tick.
+            if (DateTime.UtcNow - _lastClaudeStatePushUtc >= TimeSpan.FromSeconds(20))
+            {
+                _lastClaudeStatePushUtc = DateTime.UtcNow;
+                _ = PushClaudeStateAsync();
+            }
+        }
+
+        private async void ClaudeWebView_WebMessageReceived(object? sender, Microsoft.Web.WebView2.Core.CoreWebView2WebMessageReceivedEventArgs e)
+        {
+            try
+            {
+                using var message = JsonDocument.Parse(e.WebMessageAsJson);
+                var root = message.RootElement;
+                var action = root.TryGetProperty("action", out var actionValue) ? actionValue.GetString() : null;
+                switch (action)
+                {
+                    case "window:minimize": WindowState = WindowState.Minimized; break;
+                    case "window:toggle-maximize": WindowState = WindowState == WindowState.Maximized ? WindowState.Normal : WindowState.Maximized; break;
+                    case "window:close": Close(); break;
+                    case "window:drag":
+                        if (WindowState != WindowState.Minimized)
+                        {
+                            var handle = new System.Windows.Interop.WindowInteropHelper(this).Handle;
+                            NativeReleaseCapture();
+                            _ = SendWindowMessage(handle, WmNcLeftButtonDown, HtCaption, IntPtr.Zero);
+                        }
+                        break;
+                    case "pairing:show": ShowPairingQr_Click(this, new RoutedEventArgs()); break;
+                    case "app:exit": ExitApplication(); break;
+                    case "cloudflare:toggle": ToggleCloudflareTunnel_Click(CloudflareTunnelButton, new RoutedEventArgs()); break;
+                    case "share:file": ChooseShareFile_Click(this, new RoutedEventArgs()); break;
+                    case "share:clipboard": ShareClipboard_Click(this, new RoutedEventArgs()); break;
+                    case "share:folder": OpenSharedFilesFolder_Click(this, new RoutedEventArgs()); break;
+                    case "share:queue-path":
+                        if (root.TryGetProperty("path", out var pathValue) && pathValue.GetString() is string path && File.Exists(path)) QueueShareFile(path);
+                        break;
+                    case "history:refresh": await PushClaudeHistoryAsync(); break;
+                    case "device:refresh": _lastClaudeStatePushUtc = DateTime.UtcNow; await PushClaudeStateAsync(); break;
+                    case "processes:refresh": await RefreshMemoryDetailsAsync(); await RefreshProcessesAsync(); await PushClaudeProcessesAsync(); break;
+                    case "processes:kill":
+                        if (root.TryGetProperty("pid", out var pidValue) && pidValue.TryGetInt32(out var pid))
+                        {
+                            var terminated = await RunProcessTerminationAsync(pid);
+                            await PushClaudeNoticeAsync(terminated ? $"Proses {pid} dihentikan." : $"Proses {pid} tidak dapat dihentikan.");
+                            await RefreshProcessesAsync();
+                            await PushClaudeProcessesAsync();
+                        }
+                        break;
+                    case "history:clear": ClearWindowsHistory_Click(this, new RoutedEventArgs()); await PushClaudeHistoryAsync(); break;
+                    case "rammap:run":
+                        if (root.TryGetProperty("ramAction", out var ramAction) && ramAction.GetString() is string requestedRamAction)
+                        {
+                            var selectedItem = RamMapActionSelector.Items.OfType<ComboBoxItem>().FirstOrDefault(item => Equals(item.Tag?.ToString(), requestedRamAction));
+                            if (selectedItem is not null) { RamMapActionSelector.SelectedItem = selectedItem; RunRamMapAction_Click(this, new RoutedEventArgs()); }
+                        }
+                        break;
+                    case "settings:appearance":
+                        if (root.TryGetProperty("animations", out var animations))
+                        {
+                            _motionAnimationsEnabled = animations.GetBoolean();
+                            MotionAnimationsToggle.IsChecked = _motionAnimationsEnabled;
+                            _trayIconAnimator.SetMotionEnabled(MotionAnimationsEnabled);
+                            SaveAppearanceSettings();
+                        }
+                        if (root.TryGetProperty("classic", out var classic))
+                        {
+                            ClassicThemeToggle.IsChecked = classic.GetBoolean();
+                            AppAppearanceToggle_Changed(ClassicThemeToggle, new RoutedEventArgs());
+                        }
+                        if (root.TryGetProperty("claudeStyle", out var claudeStyle))
+                        {
+                            ClaudeStyleToggle.IsChecked = claudeStyle.GetBoolean();
+                            AppAppearanceToggle_Changed(ClaudeStyleToggle, new RoutedEventArgs());
+                        }
+                        break;
+                    case "settings:connection":
+                        if (root.TryGetProperty("automaticDualRoute", out var route)) AutomaticDualRouteToggle.IsChecked = route.GetBoolean();
+                        if (root.TryGetProperty("chimes", out var chimes)) ConnectionChimeToggle.IsChecked = chimes.GetBoolean();
+                        if (root.TryGetProperty("androidJoke", out var androidJoke)) AndroidJokeNotificationToggle.IsChecked = androidJoke.GetBoolean();
+                        ConnectionPreferencesToggle_Changed(this, new RoutedEventArgs());
+                        break;
+                    case "joke:save":
+                        JokeMessageBox.Text = root.TryGetProperty("message", out var jokeMessage) ? jokeMessage.GetString() ?? "" : "";
+                        JokeBackgroundHexBox.Text = root.TryGetProperty("color", out var jokeColor) ? jokeColor.GetString() ?? "" : "";
+                        if (root.TryGetProperty("animation", out var jokeAnimation) && jokeAnimation.TryGetInt32(out var animationIndex)) JokeAnimationCombo.SelectedIndex = Math.Clamp(animationIndex, 0, JokeAnimationCombo.Items.Count - 1);
+                        SaveJokeSettings_Click(this, new RoutedEventArgs());
+                        await PushClaudeNoticeAsync(JokeSettingsStatusText.Text);
+                        break;
+                    case "joke:show": TriggerAndroidJoke_Click(this, new RoutedEventArgs()); await PushClaudeNoticeAsync(JokeSettingsStatusText.Text); break;
+                    case "joke:stop": StopAndroidJoke_Click(this, new RoutedEventArgs()); await PushClaudeNoticeAsync(JokeSettingsStatusText.Text); break;
+                    case "cloudflare:setup": SetupCloudflareAccount_Click(SetupCloudflareAccountButton, new RoutedEventArgs()); break;
+                    case "cloudflare:save":
+                        CloudflareHostnameBox.Text = root.TryGetProperty("hostname", out var host) ? host.GetString() ?? "" : "";
+                        CloudflareTokenBox.Password = root.TryGetProperty("token", out var token) ? token.GetString() ?? "" : "";
+                        SaveCloudflareTunnel_Click(SaveCloudflareTunnelButton, new RoutedEventArgs());
+                        await PushClaudeNoticeAsync(CloudflareTunnelStatusText.Text);
+                        break;
+                    case "screen:save":
+                        UnattendedAccessToggle.IsChecked = root.TryGetProperty("enabled", out var screenEnabled) && screenEnabled.GetBoolean();
+                        ScreenAccessPasswordBox.Password = root.TryGetProperty("password", out var screenPassword) ? screenPassword.GetString() ?? "" : "";
+                        SaveScreenAccess_Click(SaveScreenAccessButton, new RoutedEventArgs());
+                        await PushClaudeNoticeAsync(ScreenAccessStatus.Text);
+                        break;
+                }
+            }
+            catch (Exception ex) { SetConnectionInfo("Aksi UI baru gagal: " + ex.Message); await PushClaudeNoticeAsync(ex.Message); }
+        }
+
+        private async Task PushClaudeProcessesAsync()
+        {
+            if (!_claudeWebViewReady) return;
+            var processes = await Task.Run(GetProcessSnapshot);
+            var payload = JsonSerializer.Serialize(processes.Select(p => new { name = p.Name, pid = p.Pid, memory = Math.Round(p.WorkingSetBytes / 1024d / 1024d), canTerminate = p.CanTerminate, note = p.TerminationNote, iconBase64 = p.IconBase64 }));
+            await ClaudeWebView.CoreWebView2.ExecuteScriptAsync($"window.laptopStatusProcesses && window.laptopStatusProcesses({payload})");
+        }
+
+        private async Task PushClaudeHistoryAsync()
+        {
+            if (!_claudeWebViewReady) return;
+            object[] history;
+            lock (_windowsHistory) history = _windowsHistory.Select(h => new { category = h.Category, title = h.Title, detail = h.Subtitle, time = DateTimeOffset.FromUnixTimeMilliseconds(h.AtUtc).ToLocalTime().ToString("HH:mm") }).Cast<object>().ToArray();
+            var payload = JsonSerializer.Serialize(history);
+            await ClaudeWebView.CoreWebView2.ExecuteScriptAsync($"window.laptopStatusHistory && window.laptopStatusHistory({payload})");
+        }
+
+        private async Task PushClaudeNoticeAsync(string message)
+        {
+            if (!_claudeWebViewReady) return;
+            var payload = JsonSerializer.Serialize(message);
+            await ClaudeWebView.CoreWebView2.ExecuteScriptAsync($"window.laptopStatusNotice && window.laptopStatusNotice({payload})");
+        }
+
+        private async Task PushClaudeStateAsync()
+        {
+            if (!_claudeWebViewReady) return;
+            var memory = new MemoryStatus { Length = (uint)Marshal.SizeOf<MemoryStatus>() };
+            var hasMemory = GlobalMemoryStatusEx(ref memory);
+            var cpu = string.IsNullOrWhiteSpace(_hardwareSnapshot.CpuModel) ? LoadProcessorName() : _hardwareSnapshot.CpuModel;
+            var gpu = string.Join(", ", _hardwareSnapshot.Gpus.Select(item => item.Model).Where(value => !string.IsNullOrWhiteSpace(value)));
+            var gpuDetails = _hardwareSnapshot.Gpus.Select(item => new
+            {
+                model = GpuModelForCard(item.Model),
+                series = GpuSeriesFor(item.Model),
+                kind = IsDedicatedGpu(item.Model) ? "Khusus" : "Terintegrasi",
+                logo = GetHardwareLogoDataUri(item.Model, isGpu: true),
+                usagePercent = item.UsagePercent is double usage && usage is >= 0 and <= 100 ? usage : (double?)null,
+                temperatureC = item.TemperatureC is double temperature && temperature is >= 0 and <= 120 ? temperature : (double?)null
+            }).ToArray();
+            var disks = string.Join(" · ", DriveInfo.GetDrives().Where(drive => drive.IsReady).Select(drive => $"{drive.Name.TrimEnd('\\')} {FormatBytes((ulong)drive.TotalSize)}"));
+            var jokeAnimationIndex = Math.Max(0, JokeAnimationCombo.Items.IndexOf(JokeAnimationCombo.Items.OfType<ComboBoxItem>().FirstOrDefault(item => Equals(item.Tag?.ToString(), _jokeSettings.Animation))));
+            var payload = JsonSerializer.Serialize(new
+            {
+                address = AddressText.Text,
+                pairingKey = _pairingKey,
+                fingerprint = CertificateFingerprintText.Text,
+                tunnelStatus = CloudflareTunnelStatusText.Text,
+                serviceStatus = StatusText.Text,
+                cpuModel = cpu,
+                cpuFamily = CpuFamilyFor(cpu),
+                cpuLogo = GetHardwareLogoDataUri(cpu, isGpu: false),
+                cpuUsage = _cpu,
+                claudeStyle = _claudeStyleEnabled,
+                logicalProcessors = Environment.ProcessorCount,
+                architecture = RuntimeInformation.OSArchitecture.ToString(),
+                cpuTemperature = _hardwareSnapshot.CpuTemperatureC is >= 5 and <= 115 ? $"{_hardwareSnapshot.CpuTemperatureC:0}°C" : "—",
+                fanSpeed = _hardwareSnapshot.FanRpm is > 0 and < 100000 ? $"{_hardwareSnapshot.FanRpm:0} RPM" : "—",
+                gpus = gpuDetails,
+                gpuModel = string.IsNullOrWhiteSpace(gpu) ? "Tidak terdeteksi" : gpu,
+                gpuUsage = _hardwareSnapshot.GpuUsagePercent is double gpuPercent && gpuPercent is >= 0 and <= 100 ? $"{gpuPercent:0}%" : "Tidak tersedia",
+                memory = hasMemory ? FormatBytes(memory.TotalPhysical) : "Tidak tersedia",
+                disk = string.IsNullOrWhiteSpace(disks) ? "Tidak tersedia" : disks,
+                os = RuntimeInformation.OSDescription,
+                batteryText = _battery.HasValue ? $"{_battery.Value}%" : "Tidak tersedia",
+                troubleshooting = TroubleshootingStatusText.Text,
+                tunnelActive = _cloudflaredProcess is { HasExited: false },
+                animations = _motionAnimationsEnabled,
+                classic = _classicThemeEnabled,
+                automaticDualRoute = _automaticDualRouteEnabled,
+                chimes = _connectionChimesEnabled,
+                androidJoke = _androidJokeNotificationEnabled,
+                screenAccessEnabled = _screenPasswordAccessEnabled,
+                jokeMessage = _jokeSettings.Message,
+                jokeColor = _jokeSettings.BackgroundHex,
+                jokeAnimation = jokeAnimationIndex,
+                tunnelHostname = _cloudflareSettings?.Hostname ?? ""
+            });
+            await ClaudeWebView.CoreWebView2.ExecuteScriptAsync($"window.laptopStatusSetState && window.laptopStatusSetState({payload})");
         }
 
         private void ConnectionPreferencesToggle_Changed(object sender, RoutedEventArgs e)
@@ -2062,35 +2380,130 @@ namespace LaptopStatus
 
         private void ApplyClassicTheme()
         {
-            var classic = _classicThemeEnabled;
-            Background = new SolidColorBrush(classic ? Color.FromRgb(9, 15, 24) : Color.FromRgb(11, 17, 25));
-            SetBrushColor("GlassSurfaceBrush", classic ? Color.FromArgb(230, 42, 57, 72) : Color.FromRgb(24, 34, 48));
-            SetBrushColor("GlassPanelBrush", classic ? Color.FromArgb(216, 35, 48, 61) : Color.FromRgb(17, 25, 35));
-            SetBrushColor("PanelBrush", classic ? Color.FromArgb(211, 21, 29, 39) : Color.FromRgb(17, 25, 35));
-            SetBrushColor("Panel2Brush", classic ? Color.FromArgb(207, 30, 42, 56) : Color.FromRgb(24, 34, 48));
-            SetBrushColor("LineBrush", classic ? Color.FromArgb(54, 255, 255, 255) : Color.FromArgb(20, 255, 255, 255));
-            SetBrushColor("GlassLineBrush", classic ? Color.FromArgb(69, 255, 255, 255) : Color.FromArgb(20, 255, 255, 255));
+            var claude = _claudeStyleEnabled;
+            var classic = _classicThemeEnabled && !claude;
+            var surface = claude ? Color.FromRgb(251, 252, 250) : classic ? Color.FromArgb(230, 42, 57, 72) : Color.FromRgb(24, 34, 48);
+            var panel = claude ? Color.FromRgb(251, 252, 250) : classic ? Color.FromArgb(216, 35, 48, 61) : Color.FromRgb(17, 25, 35);
+            var panel2 = claude ? Color.FromRgb(225, 232, 227) : classic ? Color.FromArgb(207, 30, 42, 56) : Color.FromRgb(24, 34, 48);
+            var lineColor = claude ? Color.FromRgb(213, 220, 215) : classic ? Color.FromArgb(69, 255, 255, 255) : Color.FromArgb(20, 255, 255, 255);
+            var accent = claude ? Color.FromRgb(10, 107, 85) : Color.FromRgb(114, 228, 191);
+            Background = new SolidColorBrush(claude ? Color.FromRgb(244, 246, 243) : classic ? Color.FromRgb(9, 15, 24) : Color.FromRgb(11, 17, 25));
+            SetBrushColor("GlassSurfaceBrush", surface);
+            SetBrushColor("GlassPanelBrush", panel);
+            SetBrushColor("PanelBrush", claude ? Color.FromRgb(251, 252, 250) : classic ? Color.FromArgb(211, 21, 29, 39) : Color.FromRgb(17, 25, 35));
+            SetBrushColor("Panel2Brush", panel2);
+            SetBrushColor("LineBrush", lineColor);
+            SetBrushColor("GlassLineBrush", lineColor);
+            SetBrushColor("TextBrush", Color.FromRgb(241, 246, 252));
+            SetBrushColor("TextDimBrush", Color.FromRgb(167, 181, 197));
+            SetBrushColor("AccentBrush", Color.FromRgb(114, 228, 191));
+            SetBrushColor("DangerBrush", Color.FromRgb(232, 93, 106));
+            SetBrushColor("AppScrollTrackBrush", claude ? Color.FromRgb(232, 237, 233) : classic ? Color.FromRgb(28, 42, 57) : Color.FromRgb(16, 23, 32));
+            SetBrushColor("AppScrollThumbBrush", claude ? Color.FromRgb(159, 174, 166) : classic ? Color.FromRgb(83, 102, 120) : Color.FromRgb(70, 85, 101));
+            SetBrushColor("AppScrollThumbHoverBrush", claude ? Color.FromRgb(111, 127, 119) : classic ? Color.FromRgb(113, 135, 155) : Color.FromRgb(102, 121, 139));
+            SetBrushColor("AppScrollThumbActiveBrush", claude ? Color.FromRgb(10, 107, 85) : Color.FromRgb(114, 228, 191));
+
+            if (MainContent.Parent is Grid rootGrid && rootGrid.ColumnDefinitions.Count > 0)
+                rootGrid.ColumnDefinitions[0].Width = new GridLength(claude ? 232 : 198);
+            MainContent.Margin = new Thickness(claude ? 40 : 30);
+            HeaderTitle.FontSize = claude ? 30 : 22;
+            HeaderTitle.FontWeight = claude ? FontWeights.SemiBold : FontWeights.ExtraBold;
 
             var panelGradient = new LinearGradientBrush(Color.FromArgb(216, 35, 48, 61), Color.FromArgb(200, 21, 30, 41), 90);
             var cardGradient = new LinearGradientBrush(Color.FromArgb(230, 42, 57, 72), Color.FromArgb(211, 19, 27, 36), 90);
-            var line = new SolidColorBrush(classic ? Color.FromArgb(69, 255, 255, 255) : Color.FromArgb(20, 255, 255, 255));
+            var line = new SolidColorBrush(lineColor);
             foreach (var border in FindVisualChildren<Border>(this))
             {
                 if (ReferenceEquals(border.Style, Resources["GlassPanel"]))
                 {
-                    border.Background = classic ? panelGradient : (Brush)Resources["GlassPanelBrush"];
+                    border.Background = claude ? new SolidColorBrush(panel) : classic ? panelGradient : (Brush)Resources["GlassPanelBrush"];
                     border.BorderBrush = line;
-                    border.CornerRadius = new CornerRadius(classic ? 22 : 18);
+                    border.BorderThickness = new Thickness(1);
+                    border.CornerRadius = new CornerRadius(claude ? 7 : classic ? 22 : 16);
                 }
                 else if (ReferenceEquals(border.Style, Resources["StatCard"]))
                 {
-                    border.Background = classic ? cardGradient : (Brush)Resources["GlassSurfaceBrush"];
+                    border.Background = claude ? new SolidColorBrush(surface) : classic ? cardGradient : (Brush)Resources["GlassSurfaceBrush"];
                     border.BorderBrush = line;
-                    border.BorderThickness = new Thickness(classic ? 1 : 0);
-                    border.CornerRadius = new CornerRadius(classic ? 20 : 16);
+                    border.BorderThickness = new Thickness(claude || classic ? 1 : 0);
+                    border.CornerRadius = new CornerRadius(claude ? 6 : classic ? 20 : 14);
+                    border.Padding = claude ? new Thickness(16, 14, 16, 14) : new Thickness(20, 18, 20, 18);
                     border.Effect = classic ? new DropShadowEffect { Color = Color.FromArgb(32, 0, 0, 0), BlurRadius = 22, ShadowDepth = 8, Opacity = 0.45 } : null;
                 }
             }
+
+            // Claude UI is isolated in WebView2. Never recolor the hidden WPF
+            // controls, so switching back cannot leave light-on-light text behind.
+        }
+
+        private void ApplyAppearancePaletteToControls(bool claude)
+        {
+            foreach (var textBlock in FindVisualChildren<TextBlock>(this))
+            {
+                if (IsInsideSidebar(textBlock)) continue;
+                textBlock.Foreground = RecolorAppearanceBrush(textBlock.Foreground, claude);
+            }
+
+            foreach (var control in FindVisualChildren<Control>(this))
+            {
+                if (!IsInsideSidebar(control)) control.Foreground = RecolorAppearanceBrush(control.Foreground, claude);
+                if (control.Background is SolidColorBrush background)
+                {
+                    var color = background.Color;
+                    if (claude && (color == Color.FromRgb(24, 34, 48) || color == Color.FromRgb(17, 25, 35) || color == Color.FromRgb(30, 39, 52)))
+                        control.Background = new SolidColorBrush(Color.FromRgb(251, 252, 250));
+                    else if (!claude && (color == Color.FromRgb(251, 252, 250) || color == Color.FromRgb(255, 255, 255)))
+                        control.Background = new SolidColorBrush(Color.FromRgb(24, 34, 48));
+                }
+                if (control is TextBox or ComboBox)
+                {
+                    control.Background = new SolidColorBrush(claude ? Color.FromRgb(255, 255, 255) : Color.FromRgb(24, 34, 48));
+                    control.BorderBrush = new SolidColorBrush(claude ? Color.FromRgb(159, 174, 166) : Color.FromArgb(20, 255, 255, 255));
+                }
+            }
+
+            foreach (var border in FindVisualChildren<Border>(this))
+            {
+                if (border.Background is SolidColorBrush background)
+                {
+                    if (claude && (background.Color == Color.FromRgb(24, 34, 48) || background.Color == Color.FromRgb(17, 25, 35)))
+                        border.Background = new SolidColorBrush(Color.FromRgb(251, 252, 250));
+                    else if (claude && background.Color == Color.FromArgb(26, 114, 228, 191))
+                        border.Background = new SolidColorBrush(Color.FromRgb(225, 232, 227));
+                    else if (!claude && (background.Color == Color.FromRgb(251, 252, 250) || background.Color == Color.FromRgb(225, 232, 227)))
+                        border.Background = new SolidColorBrush(Color.FromRgb(24, 34, 48));
+                }
+                if (border.BorderBrush is SolidColorBrush borderBrush && borderBrush.Color == Color.FromArgb(20, 255, 255, 255))
+                    border.BorderBrush = new SolidColorBrush(claude ? Color.FromRgb(213, 220, 215) : Color.FromArgb(20, 255, 255, 255));
+                else if (!claude && border.BorderBrush is SolidColorBrush lightBorder && lightBorder.Color == Color.FromRgb(213, 220, 215))
+                    border.BorderBrush = new SolidColorBrush(Color.FromArgb(20, 255, 255, 255));
+            }
+        }
+
+        private bool IsInsideSidebar(DependencyObject element)
+        {
+            for (DependencyObject? current = element; current is not null; current = VisualTreeHelper.GetParent(current))
+                if (ReferenceEquals(current, SidebarNavRoot)) return true;
+            return false;
+        }
+
+        private static Brush RecolorAppearanceBrush(Brush brush, bool claude)
+        {
+            if (brush is not SolidColorBrush solid) return brush;
+            var color = solid.Color;
+            if (claude)
+            {
+                if (color == Color.FromRgb(114, 228, 191)) return new SolidColorBrush(Color.FromRgb(10, 107, 85));
+                if (color == Color.FromRgb(167, 181, 197) || color == Color.FromRgb(141, 163, 178)) return new SolidColorBrush(Color.FromRgb(85, 99, 111));
+                if (color == Color.FromRgb(241, 246, 252) || color == Color.FromRgb(243, 246, 251) || color == Color.FromRgb(231, 238, 243)) return new SolidColorBrush(Color.FromRgb(14, 26, 39));
+            }
+            else
+            {
+                if (color == Color.FromRgb(10, 107, 85)) return new SolidColorBrush(Color.FromRgb(114, 228, 191));
+                if (color == Color.FromRgb(85, 99, 111)) return new SolidColorBrush(Color.FromRgb(167, 181, 197));
+                if (color == Color.FromRgb(14, 26, 39)) return new SolidColorBrush(Color.FromRgb(241, 246, 252));
+            }
+            return brush;
         }
 
         private void SetBrushColor(string key, Color color)
@@ -2439,6 +2852,61 @@ namespace LaptopStatus
             return null;
         }
 
+        private string? GetHardwareLogoDataUri(string hardwareName, bool isGpu)
+        {
+            var assembly = GetType().Assembly;
+            var names = assembly.GetManifestResourceNames();
+            string? resource = null;
+            if (isGpu)
+            {
+                var key = hardwareName.Contains("RTX", StringComparison.OrdinalIgnoreCase) ? "rtx"
+                    : hardwareName.Contains("GTX", StringComparison.OrdinalIgnoreCase) ? "gtx"
+                    : System.Text.RegularExpressions.Regex.IsMatch(hardwareName, @"(?i)\bMX\s?\d") ? "mx"
+                    : System.Text.RegularExpressions.Regex.IsMatch(hardwareName, @"(?i)\bGT\s?\d") ? "gt"
+                    : hardwareName.Contains("Arc", StringComparison.OrdinalIgnoreCase) ? "arc"
+                    : hardwareName.Contains("UHD", StringComparison.OrdinalIgnoreCase) ? "uhd"
+                    : hardwareName.Contains("HD Graphics", StringComparison.OrdinalIgnoreCase) ? "hd"
+                    : hardwareName.Contains("Snapdragon", StringComparison.OrdinalIgnoreCase) || hardwareName.Contains("Adreno", StringComparison.OrdinalIgnoreCase) ? "snapdragon"
+                    : hardwareName.Contains("Mobility", StringComparison.OrdinalIgnoreCase) || hardwareName.Contains("ATI", StringComparison.OrdinalIgnoreCase) ? "radeon-ati"
+                    : hardwareName.Contains("Radeon", StringComparison.OrdinalIgnoreCase) ? "radeon"
+                    : null;
+                if (key is not null)
+                    resource = names.FirstOrDefault(name => name.EndsWith($".Assets.Brand.Series.{key}.png", StringComparison.OrdinalIgnoreCase));
+            }
+            if (resource is null)
+            {
+                var brand = BrandFor(hardwareName);
+                if (brand is null) return null;
+                resource = names.FirstOrDefault(name => name.EndsWith($".Assets.Brand.{brand}.svg", StringComparison.OrdinalIgnoreCase));
+            }
+            if (resource is null) return null;
+            try
+            {
+                using var stream = assembly.GetManifestResourceStream(resource);
+                if (stream is null) return null;
+                using var memory = new MemoryStream();
+                stream.CopyTo(memory);
+                var bytes = memory.ToArray();
+                var mime = resource.EndsWith(".png", StringComparison.OrdinalIgnoreCase) ? "image/png" : "image/svg+xml";
+                if (mime == "image/svg+xml")
+                {
+                    var xml = XDocument.Parse(Encoding.UTF8.GetString(bytes));
+                    var path = xml.Descendants().FirstOrDefault(element => element.Name.LocalName == "path");
+                    if (path is not null)
+                    {
+                        var fill = hardwareName.Contains("NVIDIA", StringComparison.OrdinalIgnoreCase) || hardwareName.Contains("GeForce", StringComparison.OrdinalIgnoreCase) ? "#76B900"
+                            : hardwareName.Contains("AMD", StringComparison.OrdinalIgnoreCase) || hardwareName.Contains("Radeon", StringComparison.OrdinalIgnoreCase) ? "#ED1C24"
+                            : hardwareName.Contains("Intel", StringComparison.OrdinalIgnoreCase) || hardwareName.Contains("Iris", StringComparison.OrdinalIgnoreCase) ? "#0071C5"
+                            : "#5BE0B8";
+                        path.SetAttributeValue("fill", fill);
+                    }
+                    bytes = Encoding.UTF8.GetBytes(xml.ToString(SaveOptions.DisableFormatting));
+                }
+                return $"data:{mime};base64,{Convert.ToBase64String(bytes)}";
+            }
+            catch { return null; }
+        }
+
         private ImageSource? LoadBrandLogo(string? brand)
         {
             if (string.IsNullOrWhiteSpace(brand)) return null;
@@ -2474,7 +2942,9 @@ namespace LaptopStatus
             bool ClassicThemeEnabled,
             bool? AutomaticDualRouteEnabled = null,
             bool? ConnectionChimesEnabled = null,
-            bool? AndroidJokeNotificationEnabled = null);
+            bool? AndroidJokeNotificationEnabled = null,
+            bool? ClaudeStyleEnabled = null,
+            bool? NewUiDefaultApplied = null);
 
         private const int MaximumSharedFileBytes = 25 * 1024 * 1024;
 
@@ -2532,6 +3002,7 @@ namespace LaptopStatus
                 ShareStatusText.Text = $"{Path.GetFileName(path)} siap diambil dari Android ({FormatBytes((ulong)bytes.Length)}).";
             }
             catch (Exception ex) { ShareStatusText.Text = "File tidak dapat dibagikan: " + ex.Message; }
+            _ = PushClaudeNoticeAsync(ShareStatusText.Text);
         }
 
         private void ShareClipboard_Click(object sender, RoutedEventArgs e)
@@ -2549,6 +3020,7 @@ namespace LaptopStatus
                 ShareStatusText.Text = "Teks clipboard siap diambil dari Android.";
             }
             catch (Exception ex) { ShareStatusText.Text = "Clipboard tidak dapat dibagikan: " + ex.Message; }
+            _ = PushClaudeNoticeAsync(ShareStatusText.Text);
         }
 
         private void OpenSharedFilesFolder_Click(object sender, RoutedEventArgs e)
@@ -2557,8 +3029,9 @@ namespace LaptopStatus
             {
                 Directory.CreateDirectory(_sharedFilesPath);
                 Process.Start(new ProcessStartInfo("explorer.exe", $"\"{_sharedFilesPath}\"") { UseShellExecute = true });
+                _ = PushClaudeNoticeAsync("Folder file yang diterima dibuka.");
             }
-            catch (Exception ex) { ShareStatusText.Text = "Folder file berbagi tidak dapat dibuka: " + ex.Message; }
+            catch (Exception ex) { ShareStatusText.Text = "Folder file berbagi tidak dapat dibuka: " + ex.Message; _ = PushClaudeNoticeAsync(ShareStatusText.Text); }
         }
 
         private void AnimateMetricValue(TextBlock target, double value, string suffix)
@@ -2882,12 +3355,14 @@ namespace LaptopStatus
             {
                 var message = await PrivilegedActionRunner.RunRamMapActionAsync(action);
                 RamMapActionStatus.Text = message;
+                _ = PushClaudeNoticeAsync(message);
                 await RefreshMemoryDetailsAsync();
                 RecordWindowsHistory("Aksi RAMMap: " + action);
             }
             catch (Exception ex)
             {
                 RamMapActionStatus.Text = ex.Message;
+                _ = PushClaudeNoticeAsync(ex.Message);
             }
             finally { RunRamMapActionButton.IsEnabled = true; }
         }
@@ -4775,7 +5250,8 @@ namespace LaptopStatus
             foreach (var toast in _trayToasts.ToArray()) toast.Close();
             _trayToasts.Clear();
             _trayIconAnimator.Dispose();
-            _trayIcon.Visible = false; _trayIcon.Dispose();
+            try { _trayIcon.Visible = false; } catch (ObjectDisposedException) { }
+            try { _trayIcon.Dispose(); } catch (ObjectDisposedException) { }
             _legacyTrayMenu?.Dispose();
             _applicationIcon?.Dispose();
             base.OnClosed(e);

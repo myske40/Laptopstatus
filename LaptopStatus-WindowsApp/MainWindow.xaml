@@ -1,6 +1,7 @@
 <Window x:Class="LaptopStatus.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:wv2="clr-namespace:Microsoft.Web.WebView2.Wpf;assembly=Microsoft.Web.WebView2.Wpf"
         Title="Status Perangkat" Height="700" Width="1060" MinHeight="480" MinWidth="760" Icon="Assets/laptop-status-logo.png"
         Background="#0B1119"
         FontFamily="Segoe UI">
@@ -53,7 +54,7 @@
         </Style>
     </Window.Resources>
 
-    <Grid>
+    <Grid x:Name="RootLayout">
         <Grid.ColumnDefinitions>
         <ColumnDefinition Width="198"/>
         <ColumnDefinition Width="*"/>
@@ -264,6 +265,13 @@
                     <TextBlock Text="Tampilan" Foreground="{StaticResource TextBrush}" FontSize="12" FontWeight="SemiBold" Margin="0,4,0,6"/>
                     <CheckBox x:Name="MotionAnimationsToggle" Content="Aktifkan animasi" Checked="AppAppearanceToggle_Changed" Unchecked="AppAppearanceToggle_Changed" Margin="0,0,0,6"/>
                     <CheckBox x:Name="ClassicThemeToggle" Content="Tema klasik Laptop Status 1.0" Checked="AppAppearanceToggle_Changed" Unchecked="AppAppearanceToggle_Changed" Margin="0,0,0,12"/>
+                    <CheckBox x:Name="ClaudeStyleToggle" Checked="AppAppearanceToggle_Changed" Unchecked="AppAppearanceToggle_Changed" Margin="0,0,0,14" ToolTip="Mengganti tampilan dengan gaya Claude. Bunyi singkat diputar saat pilihan ini diubah.">
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                            <Path Width="18" Height="18" Margin="0,0,8,0" Stretch="Uniform" Stroke="#D97757" StrokeThickness="1.8" StrokeStartLineCap="Round" StrokeEndLineCap="Round"
+                                  Data="M12,1.5 L12,5.7 M12,18.3 L12,22.5 M4.58,3.58 L7.55,6.55 M16.45,16.45 L19.42,19.42 M1.5,12 L5.7,12 M18.3,12 L22.5,12 M4.58,20.42 L7.55,17.45 M16.45,7.55 L19.42,4.58 M8.18,2.12 L9.62,6.12 M14.38,17.88 L15.82,21.88 M2.12,8.18 L6.12,9.62 M17.88,14.38 L21.88,15.82"/>
+                            <TextBlock Text="Gaya Claude" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </CheckBox>
                     <Border Background="{DynamicResource Panel2Brush}" BorderBrush="{DynamicResource GlassLineBrush}" BorderThickness="1" CornerRadius="12" Padding="12" Margin="0,0,0,14">
                         <StackPanel>
                             <TextBlock Text="Kustomisasi Mode Joke" Foreground="{StaticResource TextBrush}" FontSize="12" FontWeight="SemiBold"/>
@@ -454,5 +462,8 @@
             </Grid>
 
         </Grid>
+        <wv2:WebView2 x:Name="ClaudeWebView" Grid.ColumnSpan="2" Visibility="Collapsed"
+                      AllowDrop="True" DragEnter="ShareDropZone_DragEnter" DragOver="ShareDropZone_DragOver"
+                      DragLeave="ShareDropZone_DragLeave" Drop="ShareDropZone_Drop"/>
     </Grid>
 </Window>

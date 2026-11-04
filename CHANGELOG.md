@@ -1,5 +1,30 @@
 # Changelog
 
+## v1.18.21 — 2026-11-04
+
+Rilis perbaikan tampilan Windows 2.11.38 dan installer Windows 2.13.26. Android tetap di 1.18.19.
+
+### Diperbaiki
+
+- Jendela utama Windows kini mengikuti area kerja layar agar tidak terpotong pada layar pendek atau skala DPI besar.
+- Drag jendela utama dan installer memakai entry point Windows yang benar, memperbaiki error `SendWindowMessage` dan membuat bar judul dapat digeser.
+- Daftar proses Windows kini selaras dengan Android: filter Semua/Bisa dihentikan/Dilindungi, ikon aplikasi, alasan perlindungan, pengurutan RAM/nama, dan hitungan kategori.
+- Tombol Hentikan berubah menjadi Yakin? sebelum proses dihentikan; perlindungan proses tetap diperiksa lagi oleh Windows.
+- Installer memakai wizard WebView yang disertakan secara lokal dan membawa aplikasi Windows versi terbaru.
+
+### Unduhan
+
+- Installer Windows: `LaptopStatus-Setup-2.13.26.exe`
+- Installer ZIP: `LaptopStatus-Setup-2.13.26.zip`
+- Aplikasi portable Windows: `LaptopStatus-Portable-2.11.38.zip`
+
+### Versi
+
+- Android: 1.18.19 (tidak berubah)
+- Windows: 2.11.38
+- Installer Windows: 2.13.26
+- Linux host: 0.1.0 (tidak berubah)
+
 ## v1.18.20 — 2026-11-04
 
 Rilis perbaikan Windows 2.11.31 dan installer Windows 2.13.12. Android tetap di 1.18.19.

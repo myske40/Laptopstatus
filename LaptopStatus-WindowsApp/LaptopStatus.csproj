@@ -15,18 +15,20 @@
     <Authors>PT HAHA NASIONAL</Authors>
     <Product>Laptop Status</Product>
     <Copyright>Copyright © 2026 PT HAHA NASIONAL</Copyright>
-    <Version>2.11.31</Version>
-    <AssemblyVersion>2.11.31.0</AssemblyVersion>
-    <FileVersion>2.11.31.0</FileVersion>
+    <Version>2.11.38</Version>
+    <AssemblyVersion>2.11.38.0</AssemblyVersion>
+    <FileVersion>2.11.38.0</FileVersion>
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.2903.40" />
     <PackageReference Include="QRCoder" Version="1.8.0" />
     <PackageReference Include="LibreHardwareMonitorLib" Version="0.9.6" />
     <Resource Include="Assets\laptop-status-logo.png" />
     <EmbeddedResource Include="Assets\Brand\*.svg" />
     <EmbeddedResource Include="Assets\Brand\Series\*.png" />
     <Content Include="Assets\Sounds\*.mp3" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="Assets\StatusPerangkatClaude.html" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
   </ItemGroup>
 
 </Project>

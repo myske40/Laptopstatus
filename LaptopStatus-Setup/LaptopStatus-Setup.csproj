@@ -2,6 +2,7 @@
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
     <TargetFramework>net8.0-windows</TargetFramework>
+    <RuntimeIdentifiers>win-x64</RuntimeIdentifiers>
     <UseWindowsForms>true</UseWindowsForms>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
@@ -11,14 +12,25 @@
     <Authors>PT HAHA NASIONAL</Authors>
     <Product>Laptop Status Setup</Product>
     <Copyright>Copyright © 2026 PT HAHA NASIONAL</Copyright>
-    <Version>2.13.12</Version>
-    <AssemblyVersion>2.13.12.0</AssemblyVersion>
-    <FileVersion>2.13.12.0</FileVersion>
+    <Version>2.13.26</Version>
+    <AssemblyVersion>2.13.26.0</AssemblyVersion>
+    <FileVersion>2.13.26.0</FileVersion>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <ApplicationIcon>..\LaptopStatus-WindowsApp\Assets\laptop-status.ico</ApplicationIcon>
   </PropertyGroup>
   <ItemGroup>
-    <EmbeddedResource Include="payload\LaptopStatusPayload.zip" LogicalName="LaptopStatus.Payload.zip" />
+    <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.2903.40" />
+    <EmbeddedResource Include="payload\LaptopStatusPayload-2.11.38-final.zip" LogicalName="LaptopStatus.Payload.zip" />
+    <EmbeddedResource Include="Assets\WizardRef\Main.dc.html" LogicalName="LaptopStatus.Wizard.Main.dc.html" />
+    <EmbeddedResource Include="Assets\WizardRef\support.js" LogicalName="LaptopStatus.Wizard.support.js" />
+    <EmbeddedResource Include="Assets\WizardRef\vendor\react.js" LogicalName="LaptopStatus.Wizard.vendor.react.js" />
+    <EmbeddedResource Include="Assets\WizardRef\vendor\react-dom.js" LogicalName="LaptopStatus.Wizard.vendor.react-dom.js" />
     <EmbeddedResource Include="..\LaptopStatus-WindowsApp\Assets\laptop-status.ico" LogicalName="LaptopStatus.Brand.ico" />
   </ItemGroup>
+  <Target Name="RemoveUnusedWebView2WpfReference" BeforeTargets="ResolveAssemblyReferences">
+    <ItemGroup>
+      <_UnusedWebView2Wpf Include="@(Reference)" Condition="'%(Reference.Filename)' == 'Microsoft.Web.WebView2.Wpf'" />
+      <Reference Remove="@(_UnusedWebView2Wpf)" />
+    </ItemGroup>
+  </Target>
 </Project>
