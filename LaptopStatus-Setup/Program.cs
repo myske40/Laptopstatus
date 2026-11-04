@@ -984,7 +984,7 @@ internal sealed class SetupForm : Form
     {
         using var key = Registry.CurrentUser.CreateSubKey(@"Software\Microsoft\Windows\CurrentVersion\Uninstall\LaptopStatus", writable: true);
         key.SetValue("DisplayName", "Laptop Status");
-        key.SetValue("DisplayVersion", "2.11.30");
+        key.SetValue("DisplayVersion", "2.11.31");
         key.SetValue("Publisher", "PT HAHA NASIONAL");
         key.SetValue("InstallLocation", installDir);
         key.SetValue("UninstallString", "powershell.exe -NoProfile -ExecutionPolicy Bypass -File \"" + Path.Combine(installDir, "Uninstall-LaptopStatus.ps1") + "\"");

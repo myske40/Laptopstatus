@@ -1,5 +1,25 @@
 # Changelog
 
+## v1.18.20 — 2026-11-04
+
+Rilis perbaikan Windows 2.11.31 dan installer Windows 2.13.12. Android tetap di 1.18.19.
+
+### Diperbaiki
+
+- Jadwal shutdown, restart, atau sleep yang terlewat saat laptop tidur atau tidak aktif kini dibatalkan; hitung mundur tidak dimulai setelah waktunya lewat.
+- Pemulihan jadwal dari Task Scheduler memberi toleransi singkat untuk waktu mulai yang terlambat, lalu memberi notifikasi bahwa jadwal telah terlewat.
+
+### Diperbarui
+
+- Banner AI di README diperbarui dengan keterangan yang lebih jelas tentang alasan penggunaan AI dan peran umpan balik pengguna.
+
+### Versi
+
+- Android: 1.18.19 (tidak berubah)
+- Windows: 2.11.31
+- Installer Windows: 2.13.12
+- Linux host: 0.1.0 (tidak berubah)
+
 ## v1.18.19 — 2026-11-03
 
 Rilis Android 1.18.19, Windows 2.11.30, dan installer Windows 2.13.11.

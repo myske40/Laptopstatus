@@ -215,7 +215,15 @@ namespace LaptopStatus
             Loaded += async (_, _) =>
             {
                 MoveNavIndicator(SummaryNav, animate: false);
-                if (_resumingScheduledPower) return;
+                if (_resumingScheduledPower)
+                {
+                    if (_expiredScheduledPowerOnStartup is { } expiredOnResume)
+                    {
+                        ShowExpiredScheduledPowerNotice(expiredOnResume);
+                        _expiredScheduledPowerOnStartup = null;
+                    }
+                    return;
+                }
                 _ = RefreshPairingAddressesAsync();
                 await Task.Run(LoadScheduledPower);
                 if (_expiredScheduledPowerOnStartup is { } expiredSchedule)
@@ -4392,7 +4400,11 @@ namespace LaptopStatus
                 }
                 var scheduledAt = DateTimeOffset.FromUnixTimeMilliseconds(schedule.AtUtc);
                 var estimatedBootTime = DateTimeOffset.UtcNow - TimeSpan.FromMilliseconds(Environment.TickCount64);
-                if (estimatedBootTime > scheduledAt)
+                // A one-shot Task Scheduler trigger may start LaptopStatus after a missed
+                // trigger (for example, after resume from sleep). Only tolerate the small
+                // startup delay when the task itself launched this recovery instance.
+                var recoveryGrace = _resumingScheduledPower ? TimeSpan.FromSeconds(30) : TimeSpan.Zero;
+                if (estimatedBootTime > scheduledAt || DateTimeOffset.UtcNow - scheduledAt > recoveryGrace)
                 {
                     CancelScheduledPower();
                     _expiredScheduledPowerOnStartup = schedule;
@@ -4444,18 +4456,31 @@ namespace LaptopStatus
         private bool CheckScheduledPower()
         {
             ScheduledPower? due = null;
+            ScheduledPower? expired = null;
+            var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+            const long recoveryGraceMilliseconds = 30_000;
             lock (_scheduledPowerGate)
             {
-                if (_scheduledPower is not null && _scheduledPower.AtUtc <= DateTimeOffset.UtcNow.ToUnixTimeMilliseconds())
+                if (_scheduledPower is not null && _scheduledPower.AtUtc <= now)
                 {
-                    due = _scheduledPower;
+                    if (now - _scheduledPower.AtUtc > recoveryGraceMilliseconds)
+                        expired = _scheduledPower;
+                    else
+                        due = _scheduledPower;
                     _scheduledPower = null;
                     try { if (File.Exists(_scheduledPowerPath)) File.Delete(_scheduledPowerPath); } catch { }
                 }
             }
-            if (due is null) return false;
+            if (due is null && expired is null) return false;
             DeleteScheduledPowerTask();
             DeleteScheduledPowerResumeStartup();
+            if (expired is not null)
+            {
+                ShowExpiredScheduledPowerNotice(expired);
+                RecordWindowsHistory($"Jadwal {expired.Action} terlewat dan dibatalkan.");
+                return true;
+            }
+            if (due is null) return true;
             RecordWindowsHistory($"Jadwal {due.Action} dimulai.");
             ShowPowerCountdown(due.Action, due.Message);
             return true;

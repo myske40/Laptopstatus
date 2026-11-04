@@ -6,34 +6,55 @@
     <linearGradient id="mint" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#65e7c4"/><stop offset="1" stop-color="#28b997"/></linearGradient>
     <filter id="glow" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="18"/></filter>
   </defs>
+
+  <!-- Latar -->
   <rect width="1200" height="360" rx="28" fill="url(#bg)"/>
-  <circle cx="965" cy="174" r="150" fill="#38d4b0" opacity=".12" filter="url(#glow)"/>
-  <path d="M40 310h1120" stroke="#274153" stroke-width="1" opacity=".65"/>
+  <circle cx="1036" cy="180" r="150" fill="#38d4b0" opacity=".12" filter="url(#glow)"/>
+  <path d="M64 308h1072" stroke="#274153" stroke-width="1" opacity=".65"/>
+
   <g font-family="Segoe UI, Inter, Arial, sans-serif">
-    <rect x="64" y="56" width="310" height="38" rx="19" fill="#173244"/>
-    <circle cx="86" cy="75" r="6" fill="url(#mint)"/>
-    <text x="104" y="80" fill="#71e4c6" font-size="13" font-weight="700" letter-spacing="1.2">CERITA DI BALIK LAPTOPSTATUS</text>
-    <text x="64" y="157" fill="#f4f8fb" font-size="43" font-weight="750">100% AI-GENERATED</text>
-    <text x="64" y="195" fill="#c2d1dc" font-size="18">AI mempercepat ide menjadi aplikasi lintas platform.</text>
-    <g font-size="13" font-weight="600">
-      <rect x="64" y="226" width="260" height="54" rx="14" fill="#142a3b" stroke="#274153"/>
-      <circle cx="88" cy="253" r="10" fill="#173f3d"/><path d="M83 253h10m-5-5v10" stroke="#71e4c6" stroke-width="1.8" stroke-linecap="round"/>
-      <text x="108" y="250" fill="#edf8f6">Lintas platform</text><text x="108" y="268" fill="#8da4b3" font-size="11">Android • Windows • Linux</text>
-      <rect x="336" y="226" width="260" height="54" rx="14" fill="#142a3b" stroke="#274153"/>
-      <circle cx="360" cy="253" r="10" fill="#173f3d"/><path d="M360 246v8l5 3" fill="none" stroke="#71e4c6" stroke-width="1.8" stroke-linecap="round"/>
-      <text x="380" y="250" fill="#edf8f6">Analisis bug lebih cepat</text><text x="380" y="268" fill="#8da4b3" font-size="11">Kode • log • perbaikan</text>
-      <rect x="608" y="226" width="260" height="54" rx="14" fill="#142a3b" stroke="#274153"/>
-      <circle cx="632" cy="253" r="10" fill="#173f3d"/><path d="M627 250h10M627 255h7" stroke="#71e4c6" stroke-width="1.8" stroke-linecap="round"/>
-      <text x="652" y="250" fill="#edf8f6">Iterasi antarmuka</text><text x="652" y="268" fill="#8da4b3" font-size="11">Berdasarkan screenshot &amp; masukan</text>
+    <!-- Label atas -->
+    <rect x="64" y="52" width="340" height="38" rx="19" fill="#173244"/>
+    <circle cx="86" cy="71" r="6" fill="url(#mint)"/>
+    <text x="104" y="76" fill="#71e4c6" font-size="13" font-weight="700" letter-spacing="1.2">CERITA DI BALIK LAPTOPSTATUS</text>
+
+    <!-- Judul -->
+    <text x="64" y="150" fill="#f4f8fb" font-size="44" font-weight="700">100% AI-GENERATED</text>
+    <text x="64" y="188" fill="#c2d1dc" font-size="18">AI mempercepat ide menjadi aplikasi lintas platform.</text>
+
+    <!-- Tiga kartu -->
+    <g font-size="14" font-weight="600">
+      <rect x="64" y="220" width="264" height="60" rx="14" fill="#142a3b" stroke="#274153"/>
+      <circle cx="92" cy="250" r="12" fill="#173f3d"/>
+      <path d="M86 250h12M92 244v12" stroke="#71e4c6" stroke-width="1.8" stroke-linecap="round"/>
+      <text x="114" y="246" fill="#edf8f6">Lintas platform</text>
+      <text x="114" y="266" fill="#8da4b3" font-size="12" font-weight="500">Android • Windows • Linux</text>
+
+      <rect x="340" y="220" width="264" height="60" rx="14" fill="#142a3b" stroke="#274153"/>
+      <circle cx="368" cy="250" r="12" fill="#173f3d"/>
+      <path d="M368 243v7l5 3" fill="none" stroke="#71e4c6" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+      <text x="390" y="246" fill="#edf8f6">Analisis bug lebih cepat</text>
+      <text x="390" y="266" fill="#8da4b3" font-size="12" font-weight="500">Kode • log • perbaikan</text>
+
+      <rect x="616" y="220" width="264" height="60" rx="14" fill="#142a3b" stroke="#274153"/>
+      <circle cx="644" cy="250" r="12" fill="#173f3d"/>
+      <path d="M638 246h12M638 251h12M638 256h7" stroke="#71e4c6" stroke-width="1.8" stroke-linecap="round"/>
+      <text x="666" y="246" fill="#edf8f6">Iterasi antarmuka</text>
+      <text x="666" y="266" fill="#8da4b3" font-size="12" font-weight="500">Berdasarkan screenshot &amp; masukan</text>
     </g>
-    <g transform="translate(928 73)">
+
+    <!-- Panel kanan (rata bawah dengan kartu, margin kanan 64) -->
+    <g transform="translate(936 80)">
       <rect x="0" y="0" width="200" height="200" rx="28" fill="#0b1623" stroke="#355063" stroke-width="2"/>
-      <circle cx="100" cy="72" r="35" fill="#173f3d"/>
-      <path d="M100 48v48M76 72h48M83 55l34 34M117 55L83 89" stroke="url(#mint)" stroke-width="3" stroke-linecap="round"/>
-      <rect x="34" y="125" width="132" height="34" rx="17" fill="url(#mint)"/>
-      <text x="100" y="147" text-anchor="middle" fill="#09202a" font-size="13" font-weight="800" letter-spacing="1">AI + UMPAN BALIK</text>
-      <text x="100" y="181" text-anchor="middle" fill="#c2d1dc" font-size="11">Kode dibuat AI • arah dari pengguna</text>
+      <circle cx="100" cy="62" r="34" fill="#173f3d"/>
+      <path d="M100 39v46M77 62h46M84 46l32 32M116 46L84 78" stroke="url(#mint)" stroke-width="3" stroke-linecap="round"/>
+      <rect x="20" y="114" width="160" height="34" rx="17" fill="url(#mint)"/>
+      <text x="100" y="136" text-anchor="middle" fill="#09202a" font-size="12" font-weight="800" letter-spacing="1">AI + UMPAN BALIK</text>
+      <text x="100" y="170" text-anchor="middle" fill="#c2d1dc" font-size="12">Kode dibuat AI</text>
+      <text x="100" y="187" text-anchor="middle" fill="#c2d1dc" font-size="12">Arah dari pengguna</text>
     </g>
-    <text x="64" y="329" fill="#8da4b3" font-size="11">AI membantu membangun dan memperbaiki. Pengguna menetapkan tujuan, menguji hasil, dan menentukan rilis.</text>
+
+    <!-- Catatan kaki -->
+    <text x="64" y="332" fill="#8da4b3" font-size="12">AI membantu membangun dan memperbaiki. Pengguna menetapkan tujuan, menguji hasil, dan menentukan rilis.</text>
   </g>
 </svg>
