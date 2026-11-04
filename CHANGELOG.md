@@ -10,13 +10,21 @@ Rilis perbaikan tampilan Windows 2.11.38 dan installer Windows 2.13.26. Android 
 - Drag jendela utama dan installer memakai entry point Windows yang benar, memperbaiki error `SendWindowMessage` dan membuat bar judul dapat digeser.
 - Daftar proses Windows kini selaras dengan Android: filter Semua/Bisa dihentikan/Dilindungi, ikon aplikasi, alasan perlindungan, pengurutan RAM/nama, dan hitungan kategori.
 - Tombol Hentikan berubah menjadi Yakin? sebelum proses dihentikan; perlindungan proses tetap diperiksa lagi oleh Windows.
-- Installer memakai wizard WebView yang disertakan secara lokal dan membawa aplikasi Windows versi terbaru.
+
+### UI baru dan animasi
+
+- UI installer baru mengadaptasi HTML wizard referensi yang diberikan pengguna, termasuk ikon animasi, gerak pada indikator langkah, animasi tombol, dan transisi antar langkah.
+- Alur wizard tetap menyediakan pilihan folder pemasangan, opsi koneksi dan pintasan, progres pemasangan, serta layar selesai.
+- UI utama Windows memakai halaman penuh dengan bilah judul, navigasi, tema terang/gelap, animasi perpindahan halaman, dan rincian perangkat berbasis ikon.
+- Tampilan Windows dan installer dimuat dari berkas lokal; keduanya tidak perlu mengambil HTML atau pustaka antarmuka dari internet saat dibuka.
 
 ### Unduhan
 
 - Installer Windows: `LaptopStatus-Setup-2.13.26.exe`
 - Installer ZIP: `LaptopStatus-Setup-2.13.26.zip`
 - Aplikasi portable Windows: `LaptopStatus-Portable-2.11.38.zip`
+- Aplikasi Android 1.18.19 (tetap): [APK di rilis v1.18.19](https://github.com/myske40/Laptopstatus/releases/download/v1.18.19/LaptopStatus-Android-1.18.19.apk)
+- Paket sumber host Linux 0.1.0 (tetap): [ZIP di rilis v1.18.19](https://github.com/myske40/Laptopstatus/releases/download/v1.18.19/LaptopStatus-Linux-0.1.0-source.zip)
 
 ### Versi
 
