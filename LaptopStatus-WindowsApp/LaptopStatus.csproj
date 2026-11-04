@@ -15,9 +15,9 @@
     <Authors>PT HAHA NASIONAL</Authors>
     <Product>Laptop Status</Product>
     <Copyright>Copyright © 2026 PT HAHA NASIONAL</Copyright>
-    <Version>2.11.38</Version>
-    <AssemblyVersion>2.11.38.0</AssemblyVersion>
-    <FileVersion>2.11.38.0</FileVersion>
+    <Version>2.11.40</Version>
+    <AssemblyVersion>2.11.40.0</AssemblyVersion>
+    <FileVersion>2.11.40.0</FileVersion>
   </PropertyGroup>
 
   <ItemGroup>

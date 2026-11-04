@@ -50,7 +50,7 @@ internal sealed class SetupForm : Form
     private readonly FlowLayoutPanel _pageBody = new() { Location = Point.Empty, FlowDirection = FlowDirection.TopDown, WrapContents = false, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, Padding = new Padding(34, 28, 34, 30), BackColor = Color.FromArgb(251, 252, 250) };
     private readonly WebView2 _webWizard = new() { Dock = DockStyle.Fill, Visible = false };
     private readonly string _defaultInstallPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Programs", "LaptopStatus");
-    private readonly string _wizardFilesDirectory = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "LaptopStatus", "InstallerWizard", "2.13.26");
+    private readonly string _wizardFilesDirectory = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "LaptopStatus", "InstallerWizard", "2.13.28");
     private readonly string _webViewUserDataDirectory = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "LaptopStatus", "InstallerWebView2");
     private readonly Timer _installStatusTimer = new() { Interval = 1050 };
     private readonly Timer _iconMotionTimer = new() { Interval = 40 };
@@ -1526,7 +1526,7 @@ internal sealed class SetupForm : Form
     {
         using var key = Registry.CurrentUser.CreateSubKey(@"Software\Microsoft\Windows\CurrentVersion\Uninstall\LaptopStatus", writable: true);
         key.SetValue("DisplayName", "Laptop Status");
-        key.SetValue("DisplayVersion", "2.11.38");
+        key.SetValue("DisplayVersion", "2.11.40");
         key.SetValue("Publisher", "PT HAHA NASIONAL");
         key.SetValue("InstallLocation", installDir);
         key.SetValue("UninstallString", "powershell.exe -NoProfile -ExecutionPolicy Bypass -File \"" + Path.Combine(installDir, "Uninstall-LaptopStatus.ps1") + "\"");

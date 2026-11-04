@@ -12,15 +12,15 @@
     <Authors>PT HAHA NASIONAL</Authors>
     <Product>Laptop Status Setup</Product>
     <Copyright>Copyright © 2026 PT HAHA NASIONAL</Copyright>
-    <Version>2.13.26</Version>
-    <AssemblyVersion>2.13.26.0</AssemblyVersion>
-    <FileVersion>2.13.26.0</FileVersion>
+    <Version>2.13.28</Version>
+    <AssemblyVersion>2.13.28.0</AssemblyVersion>
+    <FileVersion>2.13.28.0</FileVersion>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <ApplicationIcon>..\LaptopStatus-WindowsApp\Assets\laptop-status.ico</ApplicationIcon>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.2903.40" />
-    <EmbeddedResource Include="payload\LaptopStatusPayload-2.11.38-final.zip" LogicalName="LaptopStatus.Payload.zip" />
+    <EmbeddedResource Include="payload\LaptopStatusPayload-2.11.40-final.zip" LogicalName="LaptopStatus.Payload.zip" />
     <EmbeddedResource Include="Assets\WizardRef\Main.dc.html" LogicalName="LaptopStatus.Wizard.Main.dc.html" />
     <EmbeddedResource Include="Assets\WizardRef\support.js" LogicalName="LaptopStatus.Wizard.support.js" />
     <EmbeddedResource Include="Assets\WizardRef\vendor\react.js" LogicalName="LaptopStatus.Wizard.vendor.react.js" />

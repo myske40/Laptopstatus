@@ -45,6 +45,7 @@ namespace LaptopStatus
         private const int MaxScreenPasswordFailuresPerMinute = 5;
         private readonly PerformanceCounter _cpuCounter;
         private readonly Task<HardwareTelemetry> _hardwareTelemetryTask;
+        private readonly PerformanceTelemetry _performanceTelemetry;
         private int _hardwareReadInProgress;
         private DateTime _lastHardwareTelemetryReadUtc = DateTime.MinValue;
         private readonly Dictionary<string, ImageSource?> _brandLogoCache = new(StringComparer.OrdinalIgnoreCase);
@@ -273,6 +274,7 @@ namespace LaptopStatus
 
             _cpuCounter = new PerformanceCounter("Processor", "% Processor Time", "_Total");
             _cpuCounter.NextValue();
+            _performanceTelemetry = new PerformanceTelemetry();
             _hardwareTelemetryTask = Task.Run(() => new HardwareTelemetry());
             try { _applicationIcon = System.Drawing.Icon.ExtractAssociatedIcon(Environment.ProcessPath ?? Process.GetCurrentProcess().MainModule?.FileName ?? ""); }
             catch { _applicationIcon = null; }
@@ -2010,19 +2012,27 @@ namespace LaptopStatus
 
         private void PushClaudeTelemetry()
         {
-            if (!_claudeWebViewReady || ClaudeWebView.CoreWebView2 is null) return;
-            var cpu = double.IsFinite(_cpu) ? Math.Clamp((int)Math.Round(_cpu), 0, 100) : 0;
-            var ram = double.IsFinite(_ram) ? Math.Clamp((int)Math.Round(_ram), 0, 100) : 0;
-            var battery = _battery.HasValue ? Math.Clamp(_battery.Value, 0, 100) : -1;
-            var payload = JsonSerializer.Serialize(new { cpu, ram, battery });
-            _ = ClaudeWebView.CoreWebView2.ExecuteScriptAsync($"window.laptopStatusUpdate && window.laptopStatusUpdate({payload})");
-            // Detailed device state contains hardware logos and drive information. Send it
-            // less often than live gauges so WebView does not rebuild those cards every tick.
-            if (DateTime.UtcNow - _lastClaudeStatePushUtc >= TimeSpan.FromSeconds(20))
+            try
             {
-                _lastClaudeStatePushUtc = DateTime.UtcNow;
-                _ = PushClaudeStateAsync();
+                if (!_claudeWebViewReady || ClaudeWebView.CoreWebView2 is null) return;
+                var cpu = double.IsFinite(_cpu) ? Math.Clamp((int)Math.Round(_cpu), 0, 100) : 0;
+                var ram = double.IsFinite(_ram) ? Math.Clamp((int)Math.Round(_ram), 0, 100) : 0;
+                var battery = _battery.HasValue ? Math.Clamp(_battery.Value, 0, 100) : -1;
+                var cpuTemperature = _hardwareSnapshot.CpuTemperatureC is >= 5 and <= 115 ? $"{_hardwareSnapshot.CpuTemperatureC:0}°C" : "—";
+                var fanSpeed = _hardwareSnapshot.FanRpm is > 0 and < 100000 ? $"{_hardwareSnapshot.FanRpm:0} RPM" : "—";
+                var performance = _performanceTelemetry.CreateSnapshot(_cpu, _ram, _hardwareSnapshot.GpuUsagePercent,
+                    _hardwareSnapshot.GpuTemperatureC, cpuTemperature, fanSpeed);
+                var payload = JsonSerializer.Serialize(new { cpu, ram, battery, performance });
+                _ = ClaudeWebView.CoreWebView2.ExecuteScriptAsync($"window.laptopStatusUpdate && window.laptopStatusUpdate({payload})");
+                // Detailed device state contains hardware logos and drive information. Send it
+                // less often than live gauges so WebView does not rebuild those cards every tick.
+                if (DateTime.UtcNow - _lastClaudeStatePushUtc >= TimeSpan.FromSeconds(20))
+                {
+                    _lastClaudeStatePushUtc = DateTime.UtcNow;
+                    _ = PushClaudeStateAsync();
+                }
             }
+            catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"LaptopStatus telemetry update skipped: {ex}"); }
         }
 
         private async void ClaudeWebView_WebMessageReceived(object? sender, Microsoft.Web.WebView2.Core.CoreWebView2WebMessageReceivedEventArgs e)
@@ -5232,6 +5242,7 @@ namespace LaptopStatus
 
         protected override void OnClosed(EventArgs e)
         {
+            _performanceTelemetry.Dispose();
             foreach (var sessionId in _remoteShellSessions.Keys.ToArray()) RemoveRemoteShellSession(sessionId);
             _screenAccessPasswordForDisplay = null;
             SavedScreenAccessPasswordText.Clear();

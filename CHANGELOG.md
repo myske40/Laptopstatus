@@ -1,5 +1,34 @@
 # Changelog
 
+## v1.18.22 — 2026-11-04
+
+Rilis perbaikan crash dan pembaruan Statistik Windows 2.11.40 dengan installer Windows 2.13.28. Aplikasi Android 1.18.19 dan host Linux 0.1.0 tetap tersedia tanpa perubahan.
+
+### Diperbaiki
+
+- Crash pada halaman Statistik dan Rincian perangkat diperbaiki. Pembacaan informasi memori Windows kini memakai struktur native berurutan yang benar.
+- Pembaruan telemetri dijaga agar kegagalan pembacaan sensor atau performa tidak menutup aplikasi Windows.
+- Data pengecekan Statistik ditata dalam kisi agar bagian troubleshooting lebih mudah dibaca.
+
+### Statistik Windows
+
+- Tab Performa menampilkan grafik dan rincian pemakaian, kecepatan, core, prosesor logis, proses, thread, handle, cache, serta uptime CPU.
+- Rincian RAM meliputi kapasitas terpakai/tersedia, modul, kecepatan, dan slot yang terisi bila dilaporkan firmware.
+- Rincian GPU dan jaringan meliputi penggunaan, memori grafis, suhu/driver bila tersedia, serta laju unduh dan unggah.
+
+### Berkas rilis
+
+- Installer Windows 2.13.28 dan ZIP installer.
+- Aplikasi Windows portable 2.11.40.
+- APK Android 1.18.19 dan paket host Linux 0.1.0 tetap disertakan sebagai versi terbaru untuk platform tersebut.
+
+### Versi
+
+- Android: 1.18.19 (tidak berubah)
+- Windows: 2.11.40
+- Installer Windows: 2.13.28
+- Linux host: 0.1.0 (tidak berubah)
+
 ## v1.18.21 — 2026-11-04
 
 Rilis perbaikan tampilan Windows 2.11.38 dan installer Windows 2.13.26. Android tetap di 1.18.19.
