@@ -416,7 +416,6 @@ class MainActivity : AppCompatActivity() {
         findViewById<Button>(R.id.shareClipboardButton).setOnClickListener { showClipboardShareOptions() }
         findViewById<View>(R.id.shareDropTarget).setOnDragListener { _, event -> handleShareDrop(event) }
         findViewById<Button>(R.id.toggleProcessListButton).setOnClickListener { toggleProcessList() }
-        findViewById<Button>(R.id.ramActionButton).setOnClickListener { showRamActionPicker() }
         findViewById<Button>(R.id.schedulePowerButton).setOnClickListener { showSchedulePicker() }
         findViewById<Button>(R.id.cancelScheduleButton).setOnClickListener { cancelScheduledPower() }
         findViewById<Button>(R.id.guideButton).setOnClickListener { safeShowOnboardingGuide() }
@@ -639,7 +638,6 @@ class MainActivity : AppCompatActivity() {
             R.id.troubleshootingPanel to (selectedId == R.id.navDetails),
             R.id.telemetryPanel to (selectedId == R.id.navDeviceDetails),
             R.id.sharePanel to (selectedId == R.id.navDetails),
-            R.id.ramMapPanel to (selectedId == R.id.navDetails),
             R.id.powerControlPanel to (selectedId == R.id.navDevice),
             R.id.scheduleSectionTitle to (selectedId == R.id.navSchedule),
             R.id.schedulePanel to (selectedId == R.id.navSchedule),
@@ -702,7 +700,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun isPageSectionVisible(viewId: Int, navigationId: Int): Boolean = when (viewId) {
         R.id.deviceSummaryCard, R.id.screenControlPanel, R.id.powerControlPanel -> navigationId == R.id.navDevice
-        R.id.memoryPanel, R.id.processPanel, R.id.ramMapPanel, R.id.troubleshootingPanel -> navigationId == R.id.navDetails
+        R.id.memoryPanel, R.id.processPanel, R.id.troubleshootingPanel -> navigationId == R.id.navDetails
         R.id.telemetryPanel -> navigationId == R.id.navDeviceDetails
         R.id.sharePanel -> navigationId == R.id.navDetails
         R.id.scheduleSectionTitle, R.id.schedulePanel -> navigationId == R.id.navSchedule
@@ -735,7 +733,7 @@ class MainActivity : AppCompatActivity() {
         findViewById<View>(android.R.id.content).setBackgroundResource(if (classic) R.drawable.bg_app_classic else R.drawable.bg_app)
         val cardIds = intArrayOf(
             R.id.deviceSummaryCard, R.id.memoryPanel, R.id.processPanel, R.id.telemetryPanel,
-            R.id.sharePanel, R.id.ramMapPanel, R.id.troubleshootingPanel, R.id.schedulePanel, R.id.accountSettingsPanel,
+            R.id.sharePanel, R.id.troubleshootingPanel, R.id.schedulePanel, R.id.accountSettingsPanel,
             R.id.connectionPanel, R.id.screenControlPanel, R.id.powerControlPanel
         )
             cardIds.forEach { id -> findViewById<View>(id)?.setBackgroundResource(if (classic) R.drawable.bg_card_classic else R.drawable.bg_card) }
@@ -1258,6 +1256,7 @@ class MainActivity : AppCompatActivity() {
                     put("name", process.name)
                     put("memoryBytes", process.memoryBytes)
                     put("canTerminate", process.canTerminate)
+                    put("canExit", process.canExit)
                     put("note", process.note)
                     put("iconBase64", process.iconBase64)
                 })
@@ -1532,10 +1531,10 @@ class MainActivity : AppCompatActivity() {
         @JavascriptInterface fun startRemoteShell(shellType: String) { this@MainActivity.startRemoteShell(shellType) }
         @JavascriptInterface fun writeRemoteShell(text: String) { this@MainActivity.writeRemoteShell(text) }
         @JavascriptInterface fun stopRemoteShell() { this@MainActivity.stopRemoteShell() }
-        @JavascriptInterface fun runRamAction() { runOnUiThread { showRamActionPicker() } }
         @JavascriptInterface fun loadProcesses(filter: String) { runOnUiThread { loadWindowsProcesses(filter) } }
         @JavascriptInterface fun terminateProcess(pid: Int) { runOnUiThread { terminateProcessFromDemo(pid) } }
         @JavascriptInterface fun confirmTerminateProcess(pid: Int) { runOnUiThread { terminateProcessFromDemo(pid, requireConfirmation = false) } }
+        @JavascriptInterface fun forceStopRemoteLaptopStatus() { runOnUiThread { confirmCloseRemoteLaptopStatus() } }
         @JavascriptInterface fun logSessionActivity(event: String) {
             val safeEvent = event.trim().take(72)
             if (safeEvent.matches(Regex("[A-Za-z0-9_.:-]{1,72}"))) logLiveActivity("UI", safeEvent)
@@ -5110,63 +5109,6 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun showRamActionPicker() {
-        val labels = arrayOf(
-            "Kosongkan working sets",
-            "Kosongkan system working set",
-            "Kosongkan modified page list",
-            "Kosongkan standby list",
-            "Kosongkan standby priority 0"
-        )
-        val actions = arrayOf("working-sets", "system-working-set", "modified-page-list", "standby-list", "priority0-standby-list")
-        AlertDialog.Builder(this)
-            .setTitle("Aksi memori ala RAMMap")
-            .setItems(labels) { _, which -> confirmRamAction(actions[which], labels[which]) }
-            .setNegativeButton("Batal", null)
-            .show()
-    }
-
-    private fun confirmRamAction(action: String, label: String) {
-        val caution = if (action == "working-sets" || action == "system-working-set")
-            "Aplikasi mungkin memuat ulang data dan terasa lambat sesaat."
-        else
-            "Windows dapat memuat kembali halaman memori yang dibersihkan; kinerja bisa melambat sementara."
-        AlertDialog.Builder(this)
-            .setTitle("$label?")
-            .setMessage("$caution\n\nPerintah dijalankan di laptop dengan izin administrator.")
-            .setNegativeButton("Batal", null)
-            .setPositiveButton("Jalankan") { _, _ -> runRamAction(action, label) }
-            .show()
-    }
-
-    private fun runRamAction(action: String, label: String) {
-        if (!laptopOnline) {
-            findViewById<TextView>(R.id.ramActionStatus).text = "Hubungkan laptop terlebih dahulu."
-            return
-        }
-        findViewById<TextView>(R.id.ramActionStatus).text = "Menjalankan $label…"
-        dataWorker.execute {
-            try {
-                val result = PinnedTls.withConnection(address, 8765, "/api/memory/action?action=$action", "POST", key,
-                    prefs.getString("fingerprint", "").orEmpty()) { connection ->
-                    connection.doOutput = true
-                    connection.outputStream.use { }
-                    val code = connection.responseCode
-                    val stream = if (code in 200..299) connection.inputStream else connection.errorStream
-                    val body = stream?.bufferedReader()?.use { it.readText() }.orEmpty()
-                    if (code != 200) throw IllegalStateException(JSONObject(body).optString("message", "Aksi memori ditolak (HTTP $code)."))
-                    JSONObject(body)
-                }
-                main.post {
-                    findViewById<TextView>(R.id.ramActionStatus).text = result.optString("message", "$label selesai.")
-                    loadMemoryDetails()
-                }
-            } catch (error: Exception) {
-                main.post { findViewById<TextView>(R.id.ramActionStatus).text = error.message ?: "Aksi RAMMap gagal." }
-            }
-        }
-    }
-
     private fun showSchedulePicker() {
         if (!laptopOnline) {
             findViewById<TextView>(R.id.scheduleStatus).text = "Hubungkan laptop sebelum membuat jadwal."
@@ -5445,6 +5387,7 @@ class MainActivity : AppCompatActivity() {
         val name: String,
         val memoryBytes: Long,
         val canTerminate: Boolean,
+        val canExit: Boolean,
         val note: String,
         val iconBase64: String = ""
     )
@@ -5520,6 +5463,7 @@ class MainActivity : AppCompatActivity() {
                         item.optString("name", "Proses"),
                         item.optLong("workingSetBytes"),
                         item.optBoolean("canTerminate"),
+                        item.optBoolean("canExit"),
                         item.optString("terminationNote"),
                         item.optString("iconBase64").takeIf { it.length <= 131072 }.orEmpty()
                     )
@@ -5598,26 +5542,26 @@ class MainActivity : AppCompatActivity() {
                 layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
             }
             val kill = Button(this).apply {
-                text = if (process.canTerminate) "Hentikan" else "Dilindungi"
-                isEnabled = process.canTerminate
+                text = when { process.canExit -> "Paksa tutup"; process.canTerminate -> "Hentikan"; else -> "Dilindungi" }
+                isEnabled = process.canTerminate || process.canExit
                 isAllCaps = false
                 textSize = 12f
                 maxLines = 1
                 minWidth = dp(92)
                 minHeight = dp(42)
-                setTextColor(if (process.canTerminate) Color.rgb(222, 235, 245) else Color.rgb(155, 168, 181))
+                setTextColor(if (process.canTerminate || process.canExit) Color.rgb(222, 235, 245) else Color.rgb(155, 168, 181))
                 backgroundTintList = android.content.res.ColorStateList.valueOf(
-                    if (process.canTerminate) Color.rgb(43, 57, 73) else Color.rgb(36, 45, 56))
+                    if (process.canTerminate || process.canExit) Color.rgb(43, 57, 73) else Color.rgb(36, 45, 56))
                 layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { leftMargin = dp(10) }
                 setOnClickListener {
-                    armProcessKill(process, row, this)
+                    if (process.canExit) armRemoteAppExit(this) else armProcessKill(process, row, this)
                 }
             }
             header.addView(appIcon)
             header.addView(label)
             header.addView(kill)
             row.addView(header)
-            if (!process.canTerminate && process.note.isNotBlank()) {
+            if (!process.canTerminate && !process.canExit && process.note.isNotBlank()) {
                 row.addView(TextView(this).apply {
                     text = process.note
                     textSize = 10f
@@ -5652,6 +5596,65 @@ class MainActivity : AppCompatActivity() {
         }
         armedProcessKills[process.pid] = timeout
         main.postDelayed(timeout, 2200L)
+    }
+
+    private fun confirmCloseRemoteLaptopStatus() {
+        if (address.isBlank() || key.isBlank()) {
+            android.widget.Toast.makeText(this, "Pilih dan pasangkan LaptopStatus di PC terlebih dahulu.", android.widget.Toast.LENGTH_SHORT).show()
+            return
+        }
+        AlertDialog.Builder(this)
+            .setTitle("Paksa tutup LaptopStatus di PC?")
+            .setMessage("Gunakan saat LaptopStatus di PC tidak merespons. Aplikasi dan proses anaknya akan dihentikan; data yang belum tersimpan bisa hilang.")
+            .setNegativeButton("Batal", null)
+            .setPositiveButton("Paksa tutup") { _, _ -> requestCloseRemoteLaptopStatus() }
+            .show()
+    }
+
+    private fun armRemoteAppExit(button: Button) {
+        if (button.text == "Yakin?") {
+            button.isEnabled = false
+            button.text = "Menghentikan…"
+            requestCloseRemoteLaptopStatus()
+            return
+        }
+        button.text = "Yakin?"
+        button.setTextColor(Color.WHITE)
+        button.backgroundTintList = android.content.res.ColorStateList.valueOf(Color.rgb(178, 73, 88))
+        main.postDelayed({
+            if (button.isAttachedToWindow && button.text == "Yakin?") {
+                button.text = "Paksa tutup"
+                button.setTextColor(Color.rgb(222, 235, 245))
+                button.backgroundTintList = android.content.res.ColorStateList.valueOf(Color.rgb(43, 57, 73))
+            }
+        }, 2500L)
+    }
+
+    private fun requestCloseRemoteLaptopStatus() {
+        logLiveActivity("PROC", "POST /api/app/force-exit")
+        dataWorker.execute {
+            try {
+                val code = PinnedTls.withConnection(address, 8765, "/api/app/force-exit", "POST", key,
+                    prefs.getString("fingerprint", "").orEmpty()) { connection ->
+                    connection.doOutput = true
+                    connection.outputStream.use { }
+                    connection.responseCode
+                }
+                if (code != 200) throw IllegalStateException("LaptopStatus menolak permintaan (HTTP $code).")
+                logLiveActivity("PROC", "POST /api/app/force-exit HTTP 200")
+                main.post {
+                    laptopOnline = false
+                    motionProcessStatus = "LaptopStatus di PC dihentikan. Buka lagi aplikasinya di PC untuk menyambungkan kembali."
+                    findViewById<TextView>(R.id.processStatus).text = motionProcessStatus
+                    android.widget.Toast.makeText(this, "LaptopStatus di PC dihentikan.", android.widget.Toast.LENGTH_SHORT).show()
+                    publishMotionDemoProcesses()
+                }
+            } catch (error: Exception) {
+                val message = error.message ?: "Gagal menutup LaptopStatus di PC."
+                logLiveActivity("PROC", "POST /api/app/force-exit failed error=${error.javaClass.simpleName} detail=$message", 'E')
+                main.post { android.widget.Toast.makeText(this, message, android.widget.Toast.LENGTH_LONG).show() }
+            }
+        }
     }
 
     private fun requestProcessKill(process: RemoteProcess, row: View, button: Button) {

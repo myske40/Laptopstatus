@@ -10,6 +10,7 @@ namespace LaptopStatus
     {
         private const string InstanceMutexName = @"Local\LaptopStatus.Main";
         private const int SwRestore = 9;
+        internal const int WmActivateExistingInstance = 0x8000 + 0x42;
         private static Mutex? _instanceMutex;
 
         [DllImport("user32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
@@ -22,6 +23,10 @@ namespace LaptopStatus
         [DllImport("user32.dll")]
         [return: MarshalAs(UnmanagedType.Bool)]
         private static extern bool SetForegroundWindow(IntPtr windowHandle);
+
+        [DllImport("user32.dll", EntryPoint = "PostMessageW", CharSet = CharSet.Unicode, ExactSpelling = true, SetLastError = true)]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        private static extern bool PostWindowMessage(IntPtr windowHandle, int message, IntPtr wParam, IntPtr lParam);
 
         protected override void OnStartup(StartupEventArgs e)
         {
@@ -46,7 +51,8 @@ namespace LaptopStatus
                     var existingWindow = FindWindow(null, "Status Perangkat");
                     if (existingWindow != IntPtr.Zero)
                     {
-                        ShowWindowAsync(existingWindow, SwRestore);
+                        if (!PostWindowMessage(existingWindow, WmActivateExistingInstance, IntPtr.Zero, IntPtr.Zero))
+                            ShowWindowAsync(existingWindow, SwRestore);
                         SetForegroundWindow(existingWindow);
                     }
                 }

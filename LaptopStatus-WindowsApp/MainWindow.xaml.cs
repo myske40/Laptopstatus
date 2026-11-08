@@ -43,7 +43,7 @@ namespace LaptopStatus
         private const int ScreenPort = 8767;
         private const int ScreenPasswordIterations = 310000;
         private const int MaxScreenPasswordFailuresPerMinute = 5;
-        private readonly PerformanceCounter _cpuCounter;
+        private readonly PerformanceCounter? _cpuCounter;
         private readonly Task<HardwareTelemetry> _hardwareTelemetryTask;
         private readonly PerformanceTelemetry _performanceTelemetry;
         private int _hardwareReadInProgress;
@@ -145,6 +145,11 @@ namespace LaptopStatus
         private bool _shareDropHighlighted;
         private readonly object _scheduledPowerGate = new();
         private readonly DispatcherTimer _scheduledPowerTimer = new() { Interval = TimeSpan.FromSeconds(1) };
+        private readonly DispatcherTimer _breakReminderTimer = new() { Interval = TimeSpan.FromSeconds(1) };
+        private bool _breakReminderEnabled;
+        private DateTimeOffset _breakReminderDueUtc;
+        private int _breakReminderIgnoredCount;
+        private BreakReminderWindow? _breakReminderWindow;
         private ScheduledPower? _scheduledPower;
         private ScheduledPower? _expiredScheduledPowerOnStartup;
         private readonly object _scheduledRoutinesGate = new();
@@ -272,8 +277,16 @@ namespace LaptopStatus
                 : Visibility.Visible;
             AddressText.Text = "Mencari alamat jaringan…";
 
-            _cpuCounter = new PerformanceCounter("Processor", "% Processor Time", "_Total");
-            _cpuCounter.NextValue();
+            try
+            {
+                _cpuCounter = new PerformanceCounter("Processor", "% Processor Time", "_Total");
+                _cpuCounter.NextValue();
+            }
+            catch
+            {
+                _cpuCounter?.Dispose();
+                _cpuCounter = null;
+            }
             _performanceTelemetry = new PerformanceTelemetry();
             _hardwareTelemetryTask = Task.Run(() => new HardwareTelemetry());
             try { _applicationIcon = System.Drawing.Icon.ExtractAssociatedIcon(Environment.ProcessPath ?? Process.GetCurrentProcess().MainModule?.FileName ?? ""); }
@@ -283,6 +296,12 @@ namespace LaptopStatus
             _timer.Start();
             _scheduledPowerTimer.Tick += (_, _) => { if (!CheckScheduledPower()) CheckScheduledRoutines(); };
             _scheduledPowerTimer.Start();
+            _breakReminderTimer.Tick += BreakReminderTimer_Tick;
+            if (_breakReminderEnabled)
+            {
+                _breakReminderDueUtc = DateTimeOffset.UtcNow.AddMinutes(60);
+                _breakReminderTimer.Start();
+            }
 
             _trayIcon = CreateTrayIcon();
             _trayIconAnimator = new TrayIconAnimator(_trayIcon);
@@ -1405,7 +1424,7 @@ namespace LaptopStatus
         private WinForms.NotifyIcon CreateTrayIcon()
         {
             _legacyTrayMenu = new WinForms.ContextMenuStrip();
-            _legacyTrayMenu.Items.Add("Buka Status Perangkat", null, (_, _) => Dispatcher.BeginInvoke(new Action(() => { Show(); WindowState = WindowState.Normal; Activate(); })));
+            _legacyTrayMenu.Items.Add("Buka Status Perangkat", null, (_, _) => Dispatcher.BeginInvoke(new Action(() => _ = RevealMainWindowAsync())));
             _trayRetryNewMenuItem = new WinForms.ToolStripMenuItem("Gunakan menu tray sederhana")
             {
                 CheckOnClick = true,
@@ -1441,8 +1460,41 @@ namespace LaptopStatus
                     ToggleTrayFlyout();
                 }));
             };
-            icon.DoubleClick += (_, _) => Dispatcher.BeginInvoke(() => { Show(); WindowState = WindowState.Normal; Activate(); });
+            icon.DoubleClick += (_, _) => Dispatcher.BeginInvoke(new Action(() => _ = RevealMainWindowAsync()));
             return icon;
+        }
+
+        protected override void OnSourceInitialized(EventArgs e)
+        {
+            base.OnSourceInitialized(e);
+            var handle = new System.Windows.Interop.WindowInteropHelper(this).Handle;
+            System.Windows.Interop.HwndSource.FromHwnd(handle)?.AddHook(MainWindowMessageHook);
+        }
+
+        private IntPtr MainWindowMessageHook(IntPtr hwnd, int message, IntPtr wParam, IntPtr lParam, ref bool handled)
+        {
+            if (message != App.WmActivateExistingInstance) return IntPtr.Zero;
+            handled = true;
+            _ = RevealMainWindowAsync();
+            return IntPtr.Zero;
+        }
+
+        private async Task RevealMainWindowAsync(string? page = null)
+        {
+            try
+            {
+                if (_claudeWebViewReady)
+                    await ExecuteClaudeScriptAsync("window.laptopStatusPrepareForShow && window.laptopStatusPrepareForShow()");
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Could not reset the hidden window animation: {ex}");
+            }
+
+            if (!IsVisible) Show();
+            if (WindowState == WindowState.Minimized) WindowState = WindowState.Normal;
+            Activate();
+            if (page is not null) NavigateToPageByKey(page);
         }
 
         private void SetTrayFallback(bool enabled, bool retryNewTray)
@@ -1474,7 +1526,7 @@ namespace LaptopStatus
                     return;
                 }
                 _trayFlyout = new TrayFlyoutWindow(
-                    () => Dispatcher.BeginInvoke(new Action(() => { Show(); WindowState = WindowState.Normal; Activate(); })),
+                    () => Dispatcher.BeginInvoke(new Action(() => _ = RevealMainWindowAsync())),
                     () => Dispatcher.BeginInvoke(new Action(ExitApplication)),
                     () => Dispatcher.BeginInvoke(new Action(() => SetTrayFallback(enabled: true, retryNewTray: false))));
                 _trayFlyout.Closed += (_, _) => _trayFlyout = null;
@@ -1501,6 +1553,11 @@ namespace LaptopStatus
                     "Keluar dari LaptopStatus",
                     MessageBoxButton.YesNo,
                     MessageBoxImage.Warning) != MessageBoxResult.Yes) return;
+            CloseApplicationFromRemote();
+        }
+
+        private void CloseApplicationFromRemote()
+        {
             _allowExit = true;
             Close();
             Application.Current.Shutdown();
@@ -1541,15 +1598,83 @@ namespace LaptopStatus
                 oldestToast.Dismiss();
             }
             var toast = new TrayToastWindow(title, message, kind, durationMilliseconds, _trayToasts.Count, _trayToasts,
-                () => Dispatcher.BeginInvoke(new Action(() =>
-                {
-                    Show();
-                    WindowState = WindowState.Normal;
-                    Activate();
-                    NavigateToPageByKey("history");
-                })), MotionAnimationsEnabled);
+                () => Dispatcher.BeginInvoke(new Action(() => _ = RevealMainWindowAsync("history"))), MotionAnimationsEnabled);
             _trayToasts.Add(toast);
             toast.Show();
+        }
+
+        private void BreakReminderTimer_Tick(object? sender, EventArgs e)
+        {
+            if (!_breakReminderEnabled)
+            {
+                _breakReminderTimer.Stop();
+                return;
+            }
+            if (_breakReminderWindow is { IsVisible: true } || DateTimeOffset.UtcNow < _breakReminderDueUtc) return;
+
+            _breakReminderTimer.Stop();
+            var promptNumber = _breakReminderIgnoredCount + 1;
+            _breakReminderWindow = new BreakReminderWindow(
+                promptNumber,
+                MotionAnimationsEnabled,
+                onTakeBreak: () => ResetBreakReminder("Pengingat istirahat diatur ulang selama 60 menit."),
+                onIgnore: () =>
+                {
+                    _breakReminderIgnoredCount++;
+                    _breakReminderDueUtc = DateTimeOffset.UtcNow.AddMinutes(10);
+                    _breakReminderTimer.Start();
+                    ShowTrayToast("Pengingat istirahat", $"Pengingat ditunda 10 menit ({Math.Min(_breakReminderIgnoredCount, 3)}/3).", "time", 5000);
+                },
+                onCancelShutdown: () => ResetBreakReminder("Shutdown dibatalkan. Pengingat istirahat diatur ulang selama 60 menit."),
+                onShutdown: () =>
+                {
+                    _breakReminderEnabled = false;
+                    SaveAppearanceSettings();
+                    _ = ExecuteClaudeScriptAsync("if(document.querySelector('#br'))document.querySelector('#br').checked=false");
+                    try
+                    {
+                        StartPowerCommand("/s /t 0");
+                        ShowTrayToast("Shutdown dimulai", "Windows akan dimatikan sesuai pengingat istirahat.", "warn", 5000);
+                    }
+                    catch (Exception ex)
+                    {
+                        _breakReminderEnabled = true;
+                        _breakReminderDueUtc = DateTimeOffset.UtcNow.AddMinutes(10);
+                        _breakReminderTimer.Start();
+                        SaveAppearanceSettings();
+                        ShowTrayToast("Shutdown gagal", ex.Message, "warn", 7000);
+                    }
+                });
+            _breakReminderWindow.Closed += (_, _) => _breakReminderWindow = null;
+            _breakReminderWindow.Show();
+        }
+
+        private void ResetBreakReminder(string message)
+        {
+            _breakReminderIgnoredCount = 0;
+            _breakReminderDueUtc = DateTimeOffset.UtcNow.AddMinutes(60);
+            if (_breakReminderEnabled) _breakReminderTimer.Start();
+            ShowTrayToast("Pengingat istirahat", message, "info", 5000);
+        }
+
+        private void SetBreakReminderEnabled(bool enabled)
+        {
+            _breakReminderEnabled = enabled;
+            _breakReminderIgnoredCount = 0;
+            _breakReminderTimer.Stop();
+            if (enabled)
+            {
+                _breakReminderDueUtc = DateTimeOffset.UtcNow.AddMinutes(60);
+                _breakReminderTimer.Start();
+                ShowTrayToast("Pengingat istirahat aktif", "Pengingat muncul setelah 60 menit. Setelah diabaikan tiga kali, peringatan keempat memulai countdown shutdown 10 detik.", "time", 8000);
+            }
+            else
+            {
+                _breakReminderWindow?.Dismiss();
+                _breakReminderWindow = null;
+                ShowTrayToast("Pengingat istirahat mati", "Pengingat otomatis dan countdown shutdown dinonaktifkan.", "info", 5000);
+            }
+            SaveAppearanceSettings();
         }
 
         private void LoadWindowsHistory()
@@ -1709,54 +1834,59 @@ namespace LaptopStatus
 
         private void RefreshStats()
         {
-            _cpu = Math.Clamp(_cpuCounter.NextValue(), 0, 100);
-            AnimateMetricValue(CpuValue, _cpu, "%");
-            AnimateProgress(CpuUsageBar, _cpu);
             try
             {
-                var memory = new MemoryStatus { Length = (uint)Marshal.SizeOf<MemoryStatus>() };
-                _ram = GlobalMemoryStatusEx(ref memory) ? memory.MemoryLoad : 0;
-            }
-            catch { _ram = 0; }
-            AnimateMetricValue(RamValue, _ram, "%");
-            AnimateProgress(RamUsageBar, _ram);
-            _ = RefreshHardwareTelemetryAsync();
-            try
-            {
-                var charge = System.Windows.Forms.SystemInformation.PowerStatus.BatteryLifePercent;
-                _battery = charge is >= 0 and <= 1 ? (int)(charge * 100) : null;
-            }
-            catch { _battery = null; }
-            if (_battery.HasValue) AnimateMetricValue(BatteryValue, _battery.Value, "%");
-            else
-            {
-                StopMetricValueAnimation(BatteryValue);
-                _metricDisplayedValues.Remove(BatteryValue);
-                BatteryValue.Text = "N/A";
-            }
-            AnimateProgress(BatteryUsageBar, _battery ?? 0);
-            if (_battery is < 20 && !_batteryLowHistoryRecorded)
-            {
-                _batteryLowHistoryRecorded = true;
-                RecordWindowsHistory("Baterai laptop di bawah 20%", $"Daya tersisa {_battery}%.", "battery");
-            }
-            else if (_battery is >= 25)
-                _batteryLowHistoryRecorded = false;
+                try { _cpu = _cpuCounter is null ? 0 : Math.Clamp(_cpuCounter.NextValue(), 0, 100); }
+                catch { _cpu = 0; }
+                AnimateMetricValue(CpuValue, _cpu, "%");
+                AnimateProgress(CpuUsageBar, _cpu);
+                try
+                {
+                    var memory = new MemoryStatus { Length = (uint)Marshal.SizeOf<MemoryStatus>() };
+                    _ram = GlobalMemoryStatusEx(ref memory) ? memory.MemoryLoad : 0;
+                }
+                catch { _ram = 0; }
+                AnimateMetricValue(RamValue, _ram, "%");
+                AnimateProgress(RamUsageBar, _ram);
+                _ = RefreshHardwareTelemetryAsync();
+                try
+                {
+                    var charge = System.Windows.Forms.SystemInformation.PowerStatus.BatteryLifePercent;
+                    _battery = charge is >= 0 and <= 1 ? (int)(charge * 100) : null;
+                }
+                catch { _battery = null; }
+                if (_battery.HasValue) AnimateMetricValue(BatteryValue, _battery.Value, "%");
+                else
+                {
+                    StopMetricValueAnimation(BatteryValue);
+                    _metricDisplayedValues.Remove(BatteryValue);
+                    BatteryValue.Text = "N/A";
+                }
+                AnimateProgress(BatteryUsageBar, _battery ?? 0);
+                if (_battery is < 20 && !_batteryLowHistoryRecorded)
+                {
+                    _batteryLowHistoryRecorded = true;
+                    RecordWindowsHistory("Baterai laptop di bawah 20%", $"Daya tersisa {_battery}%.", "battery");
+                }
+                else if (_battery is >= 25)
+                    _batteryLowHistoryRecorded = false;
 
-            PushClaudeTelemetry();
+                PushClaudeTelemetry();
 
-            var lastAndroidStatus = Interlocked.Read(ref _lastAndroidStatusUtcMs);
-            if (_trayAndroidState == "connected" && lastAndroidStatus > 0
-                && DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() - lastAndroidStatus >= 45_000)
-            {
-                _trayAndroidState = "none";
-                RecordWindowsHistory("Android terputus", "Tidak ada pembaruan status dari Android selama 45 detik.", "connection");
+                var lastAndroidStatus = Interlocked.Read(ref _lastAndroidStatusUtcMs);
+                if (_trayAndroidState == "connected" && lastAndroidStatus > 0
+                    && DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() - lastAndroidStatus >= 45_000)
+                {
+                    _trayAndroidState = "none";
+                    RecordWindowsHistory("Android terputus", "Tidak ada pembaruan status dari Android selama 45 detik.", "connection");
+                }
+                UpdateTrayFlyout();
+                AddHistoryValue(_cpuHistory, _cpu);
+                AddHistoryValue(_ramHistory, _ram);
+                AddHistoryValue(_gpuHistory, _hardwareSnapshot.GpuUsagePercent is >= 0 and <= 100 ? _hardwareSnapshot.GpuUsagePercent.Value : double.NaN);
+                if (_showingPerformanceView) UpdatePerformanceView();
             }
-            UpdateTrayFlyout();
-            AddHistoryValue(_cpuHistory, _cpu);
-            AddHistoryValue(_ramHistory, _ram);
-            AddHistoryValue(_gpuHistory, _hardwareSnapshot.GpuUsagePercent is >= 0 and <= 100 ? _hardwareSnapshot.GpuUsagePercent.Value : double.NaN);
-            if (_showingPerformanceView) UpdatePerformanceView();
+            catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"LaptopStatus stats refresh skipped: {ex}"); }
         }
 
         private async Task RefreshHardwareTelemetryAsync()
@@ -1906,6 +2036,7 @@ namespace LaptopStatus
                 _automaticDualRouteEnabled = settings.AutomaticDualRouteEnabled ?? true;
                 _connectionChimesEnabled = settings.ConnectionChimesEnabled ?? true;
                 _androidJokeNotificationEnabled = settings.AndroidJokeNotificationEnabled ?? false;
+                _breakReminderEnabled = settings.BreakReminderEnabled ?? false;
                 if (settings.NewUiDefaultApplied != true) SaveAppearanceSettings();
             }
             catch { }
@@ -1918,7 +2049,8 @@ namespace LaptopStatus
                 Directory.CreateDirectory(Path.GetDirectoryName(_appearanceSettingsPath)!);
                 File.WriteAllText(_appearanceSettingsPath, JsonSerializer.Serialize(new AppearanceSettings(
                     _motionAnimationsEnabled, _classicThemeEnabled, _automaticDualRouteEnabled, _connectionChimesEnabled,
-                    _androidJokeNotificationEnabled, _claudeStyleEnabled, NewUiDefaultApplied: true)));
+                    _androidJokeNotificationEnabled, _claudeStyleEnabled, NewUiDefaultApplied: true,
+                    BreakReminderEnabled: _breakReminderEnabled)));
             }
             catch { }
         }
@@ -1982,12 +2114,21 @@ namespace LaptopStatus
                 ClaudeWebView.CoreWebView2.Settings.AreDevToolsEnabled = false;
                 ClaudeWebView.CoreWebView2.Settings.AreDefaultContextMenusEnabled = false;
                 ClaudeWebView.CoreWebView2.Settings.IsStatusBarEnabled = false;
+                ClaudeWebView.CoreWebView2.ProcessFailed += (_, args) => Dispatcher.BeginInvoke(new Action(() =>
+                    FallBackFromClaudeWebView($"Komponen tampilan berhenti ({args.ProcessFailedKind}). Aplikasi kembali ke tampilan klasik.")));
                 ClaudeWebView.CoreWebView2.WebMessageReceived += ClaudeWebView_WebMessageReceived;
                 var htmlPath = Path.Combine(AppContext.BaseDirectory, "Assets", "StatusPerangkatClaude.html");
                 if (!File.Exists(htmlPath)) throw new FileNotFoundException("Aset tampilan Claude tidak ditemukan.", htmlPath);
-                ClaudeWebView.CoreWebView2.NavigationCompleted += (_, _) =>
+                ClaudeWebView.CoreWebView2.NavigationCompleted += async (_, args) =>
                 {
+                    if (!args.IsSuccess)
+                    {
+                        _ = Dispatcher.BeginInvoke(new Action(() => FallBackFromClaudeWebView("Tampilan baru gagal dimuat. Aplikasi kembali ke tampilan klasik.")));
+                        return;
+                    }
                     _claudeWebViewReady = true;
+                    var appVersion = typeof(MainWindow).Assembly.GetName().Version?.ToString(3) ?? "0.0.0";
+                    await ExecuteClaudeScriptAsync($"setAppVersion({System.Text.Json.JsonSerializer.Serialize(appVersion)})");
                     ClaudeWebView.Visibility = _claudeStyleEnabled ? Visibility.Visible : Visibility.Collapsed;
                     MainContent.Visibility = _claudeStyleEnabled ? Visibility.Collapsed : Visibility.Visible;
                     UpdateClaudeWindowChrome();
@@ -2010,11 +2151,46 @@ namespace LaptopStatus
             }
         }
 
+        private async Task ExecuteClaudeScriptAsync(string script)
+        {
+            if (!_claudeWebViewReady) return;
+            try
+            {
+                var core = ClaudeWebView.CoreWebView2;
+                if (core is null) return;
+                await core.ExecuteScriptAsync(script);
+            }
+            catch (Exception ex) when (ex is InvalidOperationException or COMException or ObjectDisposedException)
+            {
+                FallBackFromClaudeWebView("Komponen tampilan baru mengalami gangguan. Aplikasi kembali ke tampilan klasik.");
+                System.Diagnostics.Debug.WriteLine($"LaptopStatus WebView2 script skipped: {ex}");
+            }
+        }
+
+        private void FallBackFromClaudeWebView(string message)
+        {
+            if (!Dispatcher.CheckAccess())
+            {
+                Dispatcher.BeginInvoke(new Action(() => FallBackFromClaudeWebView(message)));
+                return;
+            }
+            _claudeWebViewReady = false;
+            _claudeStyleEnabled = false;
+            _loadingAppearanceSettings = true;
+            ClaudeStyleToggle.IsChecked = false;
+            _loadingAppearanceSettings = false;
+            MainContent.Visibility = Visibility.Visible;
+            ClaudeWebView.Visibility = Visibility.Collapsed;
+            UpdateClaudeWindowChrome();
+            SaveAppearanceSettings();
+            SetConnectionInfo(message);
+        }
+
         private void PushClaudeTelemetry()
         {
             try
             {
-                if (!_claudeWebViewReady || ClaudeWebView.CoreWebView2 is null) return;
+                if (!_claudeWebViewReady) return;
                 var cpu = double.IsFinite(_cpu) ? Math.Clamp((int)Math.Round(_cpu), 0, 100) : 0;
                 var ram = double.IsFinite(_ram) ? Math.Clamp((int)Math.Round(_ram), 0, 100) : 0;
                 var battery = _battery.HasValue ? Math.Clamp(_battery.Value, 0, 100) : -1;
@@ -2023,7 +2199,7 @@ namespace LaptopStatus
                 var performance = _performanceTelemetry.CreateSnapshot(_cpu, _ram, _hardwareSnapshot.GpuUsagePercent,
                     _hardwareSnapshot.GpuTemperatureC, cpuTemperature, fanSpeed);
                 var payload = JsonSerializer.Serialize(new { cpu, ram, battery, performance });
-                _ = ClaudeWebView.CoreWebView2.ExecuteScriptAsync($"window.laptopStatusUpdate && window.laptopStatusUpdate({payload})");
+                _ = ExecuteClaudeScriptAsync($"window.laptopStatusUpdate && window.laptopStatusUpdate({payload})");
                 // Detailed device state contains hardware logos and drive information. Send it
                 // less often than live gauges so WebView does not rebuild those cards every tick.
                 if (DateTime.UtcNow - _lastClaudeStatePushUtc >= TimeSpan.FromSeconds(20))
@@ -2066,6 +2242,10 @@ namespace LaptopStatus
                         break;
                     case "history:refresh": await PushClaudeHistoryAsync(); break;
                     case "device:refresh": _lastClaudeStatePushUtc = DateTime.UtcNow; await PushClaudeStateAsync(); break;
+                    case "stats:refresh":
+                        RefreshStats();
+                        await PushClaudeNoticeAsync("Permintaan pembaruan data sistem dikirim. Nilai CPU, memori, baterai, dan sensor akan diperbarui dari Windows.");
+                        break;
                     case "processes:refresh": await RefreshMemoryDetailsAsync(); await RefreshProcessesAsync(); await PushClaudeProcessesAsync(); break;
                     case "processes:kill":
                         if (root.TryGetProperty("pid", out var pidValue) && pidValue.TryGetInt32(out var pid))
@@ -2077,13 +2257,6 @@ namespace LaptopStatus
                         }
                         break;
                     case "history:clear": ClearWindowsHistory_Click(this, new RoutedEventArgs()); await PushClaudeHistoryAsync(); break;
-                    case "rammap:run":
-                        if (root.TryGetProperty("ramAction", out var ramAction) && ramAction.GetString() is string requestedRamAction)
-                        {
-                            var selectedItem = RamMapActionSelector.Items.OfType<ComboBoxItem>().FirstOrDefault(item => Equals(item.Tag?.ToString(), requestedRamAction));
-                            if (selectedItem is not null) { RamMapActionSelector.SelectedItem = selectedItem; RunRamMapAction_Click(this, new RoutedEventArgs()); }
-                        }
-                        break;
                     case "settings:appearance":
                         if (root.TryGetProperty("animations", out var animations))
                         {
@@ -2108,6 +2281,10 @@ namespace LaptopStatus
                         if (root.TryGetProperty("chimes", out var chimes)) ConnectionChimeToggle.IsChecked = chimes.GetBoolean();
                         if (root.TryGetProperty("androidJoke", out var androidJoke)) AndroidJokeNotificationToggle.IsChecked = androidJoke.GetBoolean();
                         ConnectionPreferencesToggle_Changed(this, new RoutedEventArgs());
+                        break;
+                    case "settings:break-reminder":
+                        if (root.TryGetProperty("enabled", out var breakReminderEnabled))
+                            SetBreakReminderEnabled(breakReminderEnabled.GetBoolean());
                         break;
                     case "joke:save":
                         JokeMessageBox.Text = root.TryGetProperty("message", out var jokeMessage) ? jokeMessage.GetString() ?? "" : "";
@@ -2140,8 +2317,8 @@ namespace LaptopStatus
         {
             if (!_claudeWebViewReady) return;
             var processes = await Task.Run(GetProcessSnapshot);
-            var payload = JsonSerializer.Serialize(processes.Select(p => new { name = p.Name, pid = p.Pid, memory = Math.Round(p.WorkingSetBytes / 1024d / 1024d), canTerminate = p.CanTerminate, note = p.TerminationNote, iconBase64 = p.IconBase64 }));
-            await ClaudeWebView.CoreWebView2.ExecuteScriptAsync($"window.laptopStatusProcesses && window.laptopStatusProcesses({payload})");
+            var payload = JsonSerializer.Serialize(processes.Select(p => new { name = p.Name, pid = p.Pid, memory = Math.Round(p.WorkingSetBytes / 1024d / 1024d), canTerminate = p.CanTerminate, canExit = p.CanExit, note = p.TerminationNote, iconBase64 = p.IconBase64 }));
+            await ExecuteClaudeScriptAsync($"window.laptopStatusProcesses && window.laptopStatusProcesses({payload})");
         }
 
         private async Task PushClaudeHistoryAsync()
@@ -2150,14 +2327,24 @@ namespace LaptopStatus
             object[] history;
             lock (_windowsHistory) history = _windowsHistory.Select(h => new { category = h.Category, title = h.Title, detail = h.Subtitle, time = DateTimeOffset.FromUnixTimeMilliseconds(h.AtUtc).ToLocalTime().ToString("HH:mm") }).Cast<object>().ToArray();
             var payload = JsonSerializer.Serialize(history);
-            await ClaudeWebView.CoreWebView2.ExecuteScriptAsync($"window.laptopStatusHistory && window.laptopStatusHistory({payload})");
+            await ExecuteClaudeScriptAsync($"window.laptopStatusHistory && window.laptopStatusHistory({payload})");
         }
 
         private async Task PushClaudeNoticeAsync(string message)
         {
             if (!_claudeWebViewReady) return;
             var payload = JsonSerializer.Serialize(message);
-            await ClaudeWebView.CoreWebView2.ExecuteScriptAsync($"window.laptopStatusNotice && window.laptopStatusNotice({payload})");
+            await ExecuteClaudeScriptAsync($"window.laptopStatusNotice && window.laptopStatusNotice({payload})");
+        }
+
+        private async Task PushClaudeButtonResultAsync(string id, string state, string message)
+        {
+            if (!_claudeWebViewReady) return;
+            var buttonId = JsonSerializer.Serialize(id);
+            var buttonState = JsonSerializer.Serialize(state);
+            var result = JsonSerializer.Serialize(message);
+            await ExecuteClaudeScriptAsync(
+                $"window.laptopStatusButtonResult && window.laptopStatusButtonResult({buttonId},{buttonState},{result})");
         }
 
         private async Task PushClaudeStateAsync()
@@ -2208,13 +2395,14 @@ namespace LaptopStatus
                 automaticDualRoute = _automaticDualRouteEnabled,
                 chimes = _connectionChimesEnabled,
                 androidJoke = _androidJokeNotificationEnabled,
+                breakReminderEnabled = _breakReminderEnabled,
                 screenAccessEnabled = _screenPasswordAccessEnabled,
                 jokeMessage = _jokeSettings.Message,
                 jokeColor = _jokeSettings.BackgroundHex,
                 jokeAnimation = jokeAnimationIndex,
                 tunnelHostname = _cloudflareSettings?.Hostname ?? ""
             });
-            await ClaudeWebView.CoreWebView2.ExecuteScriptAsync($"window.laptopStatusSetState && window.laptopStatusSetState({payload})");
+            await ExecuteClaudeScriptAsync($"window.laptopStatusSetState && window.laptopStatusSetState({payload})");
         }
 
         private void ConnectionPreferencesToggle_Changed(object sender, RoutedEventArgs e)
@@ -2954,7 +3142,8 @@ namespace LaptopStatus
             bool? ConnectionChimesEnabled = null,
             bool? AndroidJokeNotificationEnabled = null,
             bool? ClaudeStyleEnabled = null,
-            bool? NewUiDefaultApplied = null);
+            bool? NewUiDefaultApplied = null,
+            bool? BreakReminderEnabled = null);
 
         private const int MaximumSharedFileBytes = 25 * 1024 * 1024;
 
@@ -3155,9 +3344,11 @@ namespace LaptopStatus
 
         private static readonly ConcurrentDictionary<string, string> ProcessIconBase64Cache = new(StringComparer.OrdinalIgnoreCase);
 
-        private sealed record ProcessInfo(int Pid, string Name, ulong WorkingSetBytes, bool Responding, bool CanTerminate, string TerminationNote, string IconBase64, string ExecutablePath)
+        private sealed record ProcessInfo(int Pid, string Name, ulong WorkingSetBytes, bool Responding, bool CanTerminate, bool CanExit, string TerminationNote, string IconBase64, string ExecutablePath)
         {
             public string MemoryText => $"{WorkingSetBytes / 1024d / 1024d:N1} MB";
+            public bool CanTakeAction => CanTerminate || CanExit;
+            public string ActionLabel => CanExit ? "Keluar" : "Hentikan";
         }
 
         private static string ReadProcessIconBase64(string executablePath)
@@ -3199,7 +3390,9 @@ namespace LaptopStatus
                         var canTerminate = ProcessKillHelper.CanTerminate(process, out var terminationNote);
                         var executablePath = string.Empty;
                         try { executablePath = process.MainModule?.FileName ?? string.Empty; } catch { }
-                        result.Add(new ProcessInfo(process.Id, name, (ulong)Math.Max(0, bytes), responding, canTerminate, terminationNote, string.Empty, executablePath));
+                        var canExit = process.Id == Environment.ProcessId;
+                        if (canExit) terminationNote = "Tutup darurat menghentikan LaptopStatus dan proses anaknya.";
+                        result.Add(new ProcessInfo(process.Id, name, (ulong)Math.Max(0, bytes), responding, canTerminate, canExit, terminationNote, string.Empty, executablePath));
                     }
                     catch { }
                 }
@@ -3229,50 +3422,59 @@ namespace LaptopStatus
 
         private static object GetMemorySnapshot()
         {
-            var info = new PerformanceInformation { Size = (uint)Marshal.SizeOf<PerformanceInformation>() };
-            if (GetPerformanceInfo(ref info, info.Size))
+            if (IntPtr.Size == sizeof(ulong))
             {
-                static ulong Bytes(nuint pages, nuint pageSize) => checked((ulong)pages * (ulong)pageSize);
-                var total = Bytes(info.PhysicalTotal, info.PageSize);
-                var available = Bytes(info.PhysicalAvailable, info.PageSize);
-                var processes = Process.GetProcesses();
-                ulong processWorkingSet = 0;
-                foreach (var process in processes)
+                try
                 {
-                    using (process)
+                    var info = new PerformanceInformation { Size = (uint)Marshal.SizeOf<PerformanceInformation>() };
+                    if (GetPerformanceInfo(ref info, info.Size))
                     {
-                        try { processWorkingSet += (ulong)Math.Max(0, process.WorkingSet64); } catch { }
+                        static ulong Bytes(ulong pages, ulong pageSize) => checked(pages * pageSize);
+                        var total = Bytes(info.PhysicalTotal, info.PageSize);
+                        var available = Bytes(info.PhysicalAvailable, info.PageSize);
+                        ulong processWorkingSet = 0;
+                        foreach (var process in Process.GetProcesses())
+                        {
+                            using (process)
+                            {
+                                try { processWorkingSet += (ulong)Math.Max(0, process.WorkingSet64); } catch { }
+                            }
+                        }
+                        return new
+                        {
+                            totalBytes = total,
+                            usedBytes = total > available ? total - available : 0,
+                            availableBytes = available,
+                            systemCacheBytes = Bytes(info.SystemCache, info.PageSize),
+                            committedBytes = Bytes(info.CommitTotal, info.PageSize),
+                            commitLimitBytes = Bytes(info.CommitLimit, info.PageSize),
+                            pagedPoolBytes = Bytes(info.KernelPaged, info.PageSize),
+                            nonPagedPoolBytes = Bytes(info.KernelNonpaged, info.PageSize),
+                            processWorkingSetBytes = processWorkingSet,
+                            processCount = (int)info.ProcessCount
+                        };
                     }
                 }
-                return new
-                {
-                    totalBytes = total,
-                    usedBytes = total > available ? total - available : 0,
-                    availableBytes = available,
-                    systemCacheBytes = Bytes(info.SystemCache, info.PageSize),
-                    committedBytes = Bytes(info.CommitTotal, info.PageSize),
-                    commitLimitBytes = Bytes(info.CommitLimit, info.PageSize),
-                    pagedPoolBytes = Bytes(info.KernelPaged, info.PageSize),
-                    nonPagedPoolBytes = Bytes(info.KernelNonpaged, info.PageSize),
-                    processWorkingSetBytes = processWorkingSet,
-                    processCount = info.ProcessCount
-                };
+                catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"LaptopStatus memory performance data unavailable: {ex}"); }
             }
 
             var memory = new MemoryStatus { Length = (uint)Marshal.SizeOf<MemoryStatus>() };
-            GlobalMemoryStatusEx(ref memory);
+            var memoryAvailable = false;
+            try { memoryAvailable = GlobalMemoryStatusEx(ref memory); } catch { }
+            int processCount;
+            try { processCount = Process.GetProcesses().Length; } catch { processCount = 0; }
             return new
             {
-                totalBytes = memory.TotalPhysical,
-                usedBytes = memory.TotalPhysical > memory.AvailablePhysical ? memory.TotalPhysical - memory.AvailablePhysical : 0,
-                availableBytes = memory.AvailablePhysical,
+                totalBytes = memoryAvailable ? memory.TotalPhysical : 0UL,
+                usedBytes = memoryAvailable && memory.TotalPhysical > memory.AvailablePhysical ? memory.TotalPhysical - memory.AvailablePhysical : 0UL,
+                availableBytes = memoryAvailable ? memory.AvailablePhysical : 0UL,
                 systemCacheBytes = 0UL,
-                committedBytes = memory.TotalPageFile > memory.AvailablePageFile ? memory.TotalPageFile - memory.AvailablePageFile : 0,
-                commitLimitBytes = memory.TotalPageFile,
+                committedBytes = memoryAvailable && memory.TotalPageFile > memory.AvailablePageFile ? memory.TotalPageFile - memory.AvailablePageFile : 0UL,
+                commitLimitBytes = memoryAvailable ? memory.TotalPageFile : 0UL,
                 pagedPoolBytes = 0UL,
                 nonPagedPoolBytes = 0UL,
                 processWorkingSetBytes = 0UL,
-                processCount = Process.GetProcesses().Length
+                processCount
             };
         }
 
@@ -3280,8 +3482,8 @@ namespace LaptopStatus
         private struct PerformanceInformation
         {
             public uint Size;
-            public nuint CommitTotal, CommitLimit, CommitPeak, PhysicalTotal, PhysicalAvailable;
-            public nuint SystemCache, KernelTotal, KernelPaged, KernelNonpaged, PageSize;
+            public ulong CommitTotal, CommitLimit, CommitPeak, PhysicalTotal, PhysicalAvailable;
+            public ulong SystemCache, KernelTotal, KernelPaged, KernelNonpaged, PageSize;
             public uint HandleCount, ProcessCount, ThreadCount;
         }
 
@@ -3350,33 +3552,6 @@ namespace LaptopStatus
             finally { _processRefreshInProgress = false; }
         }
 
-        private async void RunRamMapAction_Click(object sender, RoutedEventArgs e)
-        {
-            if (RamMapActionSelector.SelectedItem is not ComboBoxItem selected || selected.Tag is not string action) return;
-            var label = selected.Content?.ToString() ?? "Aksi memori";
-            var confirm = MessageBox.Show(
-                $"Jalankan {label}?\n\nWindows dapat memuat ulang halaman memori. Aplikasi lain mungkin terasa lambat untuk sementara. Pastikan pekerjaan penting sudah disimpan.",
-                "Konfirmasi aksi RAMMap", MessageBoxButton.YesNo, MessageBoxImage.Warning, MessageBoxResult.No);
-            if (confirm != MessageBoxResult.Yes) return;
-
-            RunRamMapActionButton.IsEnabled = false;
-            RamMapActionStatus.Text = "Menjalankan aksi memori...";
-            try
-            {
-                var message = await PrivilegedActionRunner.RunRamMapActionAsync(action);
-                RamMapActionStatus.Text = message;
-                _ = PushClaudeNoticeAsync(message);
-                await RefreshMemoryDetailsAsync();
-                RecordWindowsHistory("Aksi RAMMap: " + action);
-            }
-            catch (Exception ex)
-            {
-                RamMapActionStatus.Text = ex.Message;
-                _ = PushClaudeNoticeAsync(ex.Message);
-            }
-            finally { RunRamMapActionButton.IsEnabled = true; }
-        }
-
         private async void RefreshProcessList_Click(object sender, RoutedEventArgs e)
         {
             if (sender is Button button) button.IsEnabled = false;
@@ -3388,6 +3563,11 @@ namespace LaptopStatus
         private async void KillProcess_Click(object sender, RoutedEventArgs e)
         {
             if (sender is not Button { Tag: int pid } button || button.DataContext is not ProcessInfo process) return;
+            if (process.CanExit)
+            {
+                ExitApplication();
+                return;
+            }
             if (_armedProcessKillPid != pid)
             {
                 ResetProcessKillArm();
@@ -3404,6 +3584,8 @@ namespace LaptopStatus
             }
 
             _processKillArmTimer?.Stop();
+            _breakReminderTimer.Stop();
+            _breakReminderWindow?.Dismiss();
             _processKillArmTimer = null;
             _armedProcessKillPid = null;
             _armedProcessKillButton = null;
@@ -3985,6 +4167,7 @@ namespace LaptopStatus
                 string? control = null;
                 string controlMessage = "";
                 int? processKillPid = null;
+                var forceStopApplicationAfterResponse = false;
                 var suppliedKey = auth is null ? "" : auth[(auth.IndexOf(':') + 1)..].Trim();
                 var authenticatedClient = secure && IsAuthorized(suppliedKey);
                 if (isPairingRequest)
@@ -4306,21 +4489,6 @@ namespace LaptopStatus
                     status = 200;
                     responseBytes = JsonSerializer.SerializeToUtf8Bytes(GetMemorySnapshot());
                 }
-                else if (secure && method == "POST" && path.StartsWith("/api/memory/action?", StringComparison.Ordinal))
-                {
-                    try
-                    {
-                        var result = await PrivilegedActionRunner.RunRamMapActionAsync(QueryValue(path, "action"));
-                        status = 200;
-                        responseBytes = JsonSerializer.SerializeToUtf8Bytes(new { ok = true, message = result });
-                        await Dispatcher.InvokeAsync(() => RecordWindowsHistory("Aksi memori: " + QueryValue(path, "action")));
-                    }
-                    catch (Exception ex)
-                    {
-                        status = ex is ArgumentException ? 400 : 501;
-                        responseBytes = JsonSerializer.SerializeToUtf8Bytes(new { error = "memory_action_failed", message = ex.Message });
-                    }
-                }
                 else if (secure && method == "GET" && path == "/api/schedule")
                 {
                     status = 200;
@@ -4396,6 +4564,7 @@ namespace LaptopStatus
                         workingSetBytes = item.WorkingSetBytes,
                         responding = item.Responding,
                         canTerminate = item.CanTerminate,
+                        canExit = item.CanExit,
                         terminationNote = item.TerminationNote,
                         iconBase64 = item.IconBase64
                     });
@@ -4431,6 +4600,12 @@ namespace LaptopStatus
                                 responseBytes = Encoding.UTF8.GetBytes("{\"error\":\"process_not_found\"}");
                             }
                         }
+                }
+                else if (secure && method == "POST" && path == "/api/app/force-exit")
+                {
+                    status = 200;
+                    responseBytes = Encoding.UTF8.GetBytes("{\"ok\":true,\"message\":\"LaptopStatus akan dihentikan.\"}");
+                    forceStopApplicationAfterResponse = true;
                 }
                 else if (secure && method == "GET" && path == "/api/screen")
                 {
@@ -4491,6 +4666,16 @@ namespace LaptopStatus
                 var header = Encoding.ASCII.GetBytes($"HTTP/1.1 {status} {statusText}\r\nContent-Type: {contentType}\r\nContent-Length: {responseBytes.Length}\r\nCache-Control: no-store\r\n{(screenSource is null ? "" : $"X-LaptopStatus-Screen-Source: {screenSource}\r\n")}{(retryAfterSeconds > 0 ? $"Retry-After: {retryAfterSeconds}\r\n" : "")}Connection: close\r\n\r\n");
                 await stream.WriteAsync(header, token);
                 await stream.WriteAsync(responseBytes, token);
+                if (forceStopApplicationAfterResponse)
+                {
+                    await stream.FlushAsync(token);
+                    _ = Task.Run(async () =>
+                    {
+                        await Task.Delay(300);
+                        try { Process.GetCurrentProcess().Kill(entireProcessTree: true); }
+                        catch { Environment.Exit(0); }
+                    });
+                }
                 if (control is not null) _ = RunControlAsync(control, controlMessage);
                 if (processKillPid.HasValue) _ = RunProcessTerminationAsync(processKillPid.Value);
             }
@@ -5251,7 +5436,7 @@ namespace LaptopStatus
             _processKillArmTimer?.Stop();
             _stop.Cancel();
             StopCloudflareTunnelRuntime();
-            _listener.Stop(); _screenListener.Stop(); _timer.Stop(); _screenSessionTimer.Stop(); _cpuCounter.Dispose(); _stop.Dispose();
+            _listener.Stop(); _screenListener.Stop(); _timer.Stop(); _screenSessionTimer.Stop(); _cpuCounter?.Dispose(); _stop.Dispose();
             _ = DisposeHardwareTelemetryAsync();
             _screenCertificate.Dispose();
             _trayRejectedStateTimer.Stop();

@@ -391,24 +391,6 @@
                                         <TextBlock x:Name="MemoryBreakdownText" Text="Cache dan pool sistem adalah perkiraan dari Windows." Foreground="{StaticResource TextDimBrush}" FontSize="10" TextWrapping="Wrap"/>
                                     </StackPanel>
                                 </Border>
-                                <Border Background="{DynamicResource Panel2Brush}" BorderBrush="{DynamicResource GlassLineBrush}" BorderThickness="1" CornerRadius="14" Padding="14" Margin="0,0,0,14">
-                                    <StackPanel>
-                                        <TextBlock Text="Aksi RAMMap" Foreground="{StaticResource TextBrush}" FontSize="14" FontWeight="SemiBold"/>
-                                        <TextBlock Text="Bersihkan daftar memori tertentu. Windows dapat meminta izin administrator; aplikasi mungkin memuat ulang data." Foreground="{StaticResource TextDimBrush}" FontSize="10" TextWrapping="Wrap" Margin="0,5,0,10"/>
-                                        <Grid>
-                                            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                                            <ComboBox x:Name="RamMapActionSelector" SelectedIndex="0" MinHeight="38" VerticalContentAlignment="Center">
-                                                <ComboBoxItem Content="Kosongkan working sets" Tag="working-sets"/>
-                                                <ComboBoxItem Content="Kosongkan system working set" Tag="system-working-set"/>
-                                                <ComboBoxItem Content="Kosongkan modified page list" Tag="modified-page-list"/>
-                                                <ComboBoxItem Content="Kosongkan standby list" Tag="standby-list"/>
-                                                <ComboBoxItem Content="Kosongkan standby priority 0" Tag="priority0-standby-list"/>
-                                            </ComboBox>
-                                            <Button x:Name="RunRamMapActionButton" Grid.Column="1" Content="Jalankan" Click="RunRamMapAction_Click" Margin="8,0,0,0" Padding="14,7"/>
-                                        </Grid>
-                                        <TextBlock x:Name="RamMapActionStatus" Text="" Foreground="{StaticResource TextDimBrush}" FontSize="10" TextWrapping="Wrap" Margin="0,7,0,0"/>
-                                    </StackPanel>
-                                </Border>
                                 <Grid Margin="0,0,0,8">
                                     <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="280"/></Grid.ColumnDefinitions>
                                     <StackPanel VerticalAlignment="Center">
@@ -423,7 +405,7 @@
                                         <DataGridTextColumn Header="PID" Binding="{Binding Pid}" Width="75"/>
                                         <DataGridTextColumn Header="RAM" Binding="{Binding MemoryText}" Width="100"/>
                                         <DataGridTemplateColumn Header="Aksi" Width="105">
-                                            <DataGridTemplateColumn.CellTemplate><DataTemplate><Button Content="Hentikan" Style="{StaticResource DangerButton}" Tag="{Binding Pid}" IsEnabled="{Binding CanTerminate}" Click="KillProcess_Click" Padding="9,5" MinHeight="30" FontSize="11"/></DataTemplate></DataGridTemplateColumn.CellTemplate>
+                                            <DataGridTemplateColumn.CellTemplate><DataTemplate><Button Content="{Binding ActionLabel}" Style="{StaticResource DangerButton}" Tag="{Binding Pid}" IsEnabled="{Binding CanTakeAction}" Click="KillProcess_Click" Padding="9,5" MinHeight="30" FontSize="11"/></DataTemplate></DataGridTemplateColumn.CellTemplate>
                                         </DataGridTemplateColumn>
                                     </DataGrid.Columns>
                                 </DataGrid>

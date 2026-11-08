@@ -11,16 +11,6 @@ namespace LaptopStatus
         private const string HelperSwitch = "--elevated-action";
         private sealed record HelperResult(bool Success, string Message);
 
-        public static async Task<string> RunRamMapActionAsync(string action)
-        {
-            if (ProcessKillHelper.IsElevated())
-                return await Task.Run(() => RamMapActions.Execute(action));
-
-            var result = await InvokeElevatedAsync("rammap", action);
-            if (!result.Success) throw new InvalidOperationException(result.Message);
-            return result.Message;
-        }
-
         public static async Task TerminateProcessAsync(int processId)
         {
             try
@@ -58,7 +48,6 @@ namespace LaptopStatus
 
                 result = arguments[1] switch
                 {
-                    "rammap" => new HelperResult(true, RamMapActions.Execute(arguments[2])),
                     "kill" when int.TryParse(arguments[2], out var pid) && pid > 4 => ExecuteKill(pid),
                     _ => throw new ArgumentException("Perintah administrator tidak dikenali.")
                 };

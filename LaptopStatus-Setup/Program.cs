@@ -24,7 +24,47 @@ internal static class Program
     private static void Main()
     {
         ApplicationConfiguration.Initialize();
+        try
+        {
+            EnsureWebView2Runtime();
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show($"Komponen WebView2 belum siap sehingga installer tidak bisa dibuka.\n\n{ex.Message}", "Laptop Status Setup", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            return;
+        }
         Application.Run(new SetupForm());
+    }
+
+    private static void EnsureWebView2Runtime()
+    {
+        try
+        {
+            _ = CoreWebView2Environment.GetAvailableBrowserVersionString();
+            return;
+        }
+        catch (WebView2RuntimeNotFoundException) { }
+
+        var installerPath = Path.Combine(Path.GetTempPath(), $"LaptopStatus-WebView2Runtime-{Environment.ProcessId}.exe");
+        try
+        {
+            using (var resource = Assembly.GetExecutingAssembly().GetManifestResourceStream("LaptopStatus.WebView2RuntimeInstaller.exe")
+                ?? throw new FileNotFoundException("Paket WebView2 Runtime tidak ditemukan di installer."))
+            using (var output = new FileStream(installerPath, FileMode.Create, FileAccess.Write, FileShare.None))
+                resource.CopyTo(output);
+
+            using var process = Process.Start(new ProcessStartInfo(installerPath, "/silent /install") { UseShellExecute = true })
+                ?? throw new InvalidOperationException("Pemasang WebView2 Runtime tidak dapat dijalankan.");
+            process.WaitForExit();
+            if (process.ExitCode != 0)
+                throw new InvalidOperationException($"Pemasangan WebView2 Runtime gagal (kode {process.ExitCode}).");
+
+            _ = CoreWebView2Environment.GetAvailableBrowserVersionString();
+        }
+        finally
+        {
+            try { if (File.Exists(installerPath)) File.Delete(installerPath); } catch { }
+        }
     }
 }
 
@@ -50,7 +90,7 @@ internal sealed class SetupForm : Form
     private readonly FlowLayoutPanel _pageBody = new() { Location = Point.Empty, FlowDirection = FlowDirection.TopDown, WrapContents = false, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, Padding = new Padding(34, 28, 34, 30), BackColor = Color.FromArgb(251, 252, 250) };
     private readonly WebView2 _webWizard = new() { Dock = DockStyle.Fill, Visible = false };
     private readonly string _defaultInstallPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Programs", "LaptopStatus");
-    private readonly string _wizardFilesDirectory = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "LaptopStatus", "InstallerWizard", "2.13.28");
+    private static string SetupProductVersion => Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "0.0.0";
     private readonly string _webViewUserDataDirectory = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "LaptopStatus", "InstallerWebView2");
     private readonly Timer _installStatusTimer = new() { Interval = 1050 };
     private readonly Timer _iconMotionTimer = new() { Interval = 40 };
@@ -172,8 +212,6 @@ internal sealed class SetupForm : Form
     {
         try
         {
-            // Prepare the local page before WebView2 starts so navigation can begin as soon as its core is ready.
-            ExtractWizardResources();
             var environment = await (_webViewEnvironmentTask ??= CoreWebView2Environment.CreateAsync());
             await _webWizard.EnsureCoreWebView2Async(environment);
             _webWizard.DefaultBackgroundColor = Color.FromArgb(10, 19, 29);
@@ -189,7 +227,9 @@ internal sealed class SetupForm : Form
                     try { Process.Start(new ProcessStartInfo(e.Uri) { UseShellExecute = true }); } catch { }
                 }
             };
-            _webWizard.CoreWebView2.SetVirtualHostNameToFolderMapping("laptopstatus-installer.local", _wizardFilesDirectory, CoreWebView2HostResourceAccessKind.Allow);
+            var core = _webWizard.CoreWebView2;
+            core.AddWebResourceRequestedFilter("https://laptopstatus-installer.local/*", CoreWebView2WebResourceContext.All);
+            core.WebResourceRequested += (_, args) => ServeWizardResource(core, args);
             _webWizard.CoreWebView2.Navigate("https://laptopstatus-installer.local/Main.dc.html");
         }
         catch (Exception ex)
@@ -202,7 +242,8 @@ internal sealed class SetupForm : Form
                 "Laptop Status Setup", MessageBoxButtons.RetryCancel, MessageBoxIcon.Error);
             if (retry == DialogResult.Retry && !IsDisposed)
             {
-                _webViewEnvironmentTask = CoreWebView2Environment.CreateAsync(null, _webViewUserDataDirectory);
+                if (_webWizard.CoreWebView2 is null)
+                    _webViewEnvironmentTask = CoreWebView2Environment.CreateAsync(null, _webViewUserDataDirectory);
                 _webWizard.Visible = true;
                 _ = InitializeWebWizardAsync();
             }
@@ -210,24 +251,38 @@ internal sealed class SetupForm : Form
         }
     }
 
-    private void ExtractWizardResources()
+    private void ServeWizardResource(CoreWebView2 core, CoreWebView2WebResourceRequestedEventArgs args)
     {
-        Directory.CreateDirectory(Path.Combine(_wizardFilesDirectory, "vendor"));
-        var resources = new (string Name, string Path)[]
+        var path = new Uri(args.Request.Uri).AbsolutePath.TrimStart('/');
+        var resourceName = path switch
         {
-            ("LaptopStatus.Wizard.Main.dc.html", "Main.dc.html"),
-            ("LaptopStatus.Wizard.support.js", "support.js"),
-            ("LaptopStatus.Wizard.vendor.react.js", Path.Combine("vendor", "react.js")),
-            ("LaptopStatus.Wizard.vendor.react-dom.js", Path.Combine("vendor", "react-dom.js"))
+            "Main.dc.html" => "LaptopStatus.Wizard.Main.dc.html",
+            "support.js" => "LaptopStatus.Wizard.support.js",
+            "vendor/react.js" => "LaptopStatus.Wizard.vendor.react.js",
+            "vendor/react-dom.js" => "LaptopStatus.Wizard.vendor.react-dom.js",
+            _ => null
         };
-        foreach (var (name, relativePath) in resources)
+        if (resourceName is null)
         {
-            using var source = Assembly.GetExecutingAssembly().GetManifestResourceStream(name)
-                ?? throw new FileNotFoundException($"Aset wizard tidak tersedia: {name}");
-            var target = Path.Combine(_wizardFilesDirectory, relativePath);
-            using var destination = File.Create(target);
-            source.CopyTo(destination);
+            args.Response = core.Environment.CreateWebResourceResponse(new MemoryStream(), 404, "Not Found", "Content-Type: text/plain; charset=utf-8");
+            return;
         }
+        var source = Assembly.GetExecutingAssembly().GetManifestResourceStream(resourceName)
+            ?? throw new FileNotFoundException($"Aset wizard tidak tersedia: {resourceName}");
+        Stream content;
+        if (path.Equals("Main.dc.html", StringComparison.OrdinalIgnoreCase))
+        {
+            using (source)
+            using (var reader = new StreamReader(source, Encoding.UTF8))
+            {
+                var html = reader.ReadToEnd().Replace("{{appVersion}}", SetupProductVersion, StringComparison.Ordinal);
+                content = new MemoryStream(Encoding.UTF8.GetBytes(html));
+            }
+        }
+        else content = source;
+        var contentType = path.EndsWith(".html", StringComparison.OrdinalIgnoreCase)
+            ? "text/html; charset=utf-8" : "text/javascript; charset=utf-8";
+        args.Response = core.Environment.CreateWebResourceResponse(content, 200, "OK", $"Content-Type: {contentType}\r\n");
     }
 
     private async void WebWizardMessageReceived(object? sender, CoreWebView2WebMessageReceivedEventArgs e)
@@ -1526,7 +1581,7 @@ internal sealed class SetupForm : Form
     {
         using var key = Registry.CurrentUser.CreateSubKey(@"Software\Microsoft\Windows\CurrentVersion\Uninstall\LaptopStatus", writable: true);
         key.SetValue("DisplayName", "Laptop Status");
-        key.SetValue("DisplayVersion", "2.11.40");
+        key.SetValue("DisplayVersion", SetupProductVersion);
         key.SetValue("Publisher", "PT HAHA NASIONAL");
         key.SetValue("InstallLocation", installDir);
         key.SetValue("UninstallString", "powershell.exe -NoProfile -ExecutionPolicy Bypass -File \"" + Path.Combine(installDir, "Uninstall-LaptopStatus.ps1") + "\"");

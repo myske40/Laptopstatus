@@ -191,12 +191,13 @@ body{margin:0}
 .btn{height:42px;padding:0 20px;border-radius:6px;border:1px solid transparent;font:600 14px 'Hanken Grotesk',system-ui,sans-serif;cursor:pointer;display:inline-flex;align-items:center;gap:10px;text-decoration:none;transition:transform .15s}
 .btnPrimary{background:var(--priBg);color:var(--priText)}
 .btnPrimary .arr{color:var(--priArrow)}
-.btnPrimary:hover{background:var(--priHover);transform:translateY(-1px)}
+.btnPrimary:hover{background:var(--priHover)}
 .btnSec{background:transparent;border-color:var(--fieldLine);color:var(--ink)}
 .btnSec:hover{background:var(--secHover)}
 .btnGhost{background:none;color:var(--muted);padding:0 8px}
 .btnGhost:hover{color:var(--ink)}
 .btn:focus-visible{outline:2px solid var(--green);outline-offset:2px}
+.btn:active{transform:none!important}
 .btn:disabled{background:var(--disBg);color:var(--disText);cursor:default;transform:none}
 .btn:disabled .arr{color:var(--disText)}
 
@@ -280,7 +281,7 @@ body{margin:0}
         </sc-for>
       </ol>
 
-      <div class="railFoot">PT HAHA NASIONAL<br>v2.11.37</div>
+      <div class="railFoot">PT HAHA NASIONAL<br>v{{appVersion}}</div>
     </aside>
 
     <section class="main">

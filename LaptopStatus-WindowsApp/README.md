@@ -1,6 +1,6 @@
 # Laptop Status — Windows
 
-Aplikasi WPF .NET 8 membaca penggunaan CPU, RAM, dan baterai, menyediakan daftar proses yang dapat dihentikan serta ringkasan memori mirip RAMMap, dan membuka API lokal TLS pada port 8765 dan 8767. Aplikasi menyiarkan identitas laptop di jaringan lokal untuk penemuan otomatis dari Android. Pairing baru meminta persetujuan di Windows, menampilkan kode cocok, lalu menyimpan token khusus perangkat dan fingerprint TLS di Android.
+Aplikasi WPF .NET 8 membaca penggunaan CPU, RAM, dan baterai, menyediakan daftar proses yang dapat dihentikan serta ringkasan memori Windows, dan membuka API lokal TLS pada port 8765 dan 8767. Aplikasi menyiarkan identitas laptop di jaringan lokal untuk penemuan otomatis dari Android. Pairing baru meminta persetujuan di Windows, menampilkan kode cocok, lalu menyimpan token khusus perangkat dan fingerprint TLS di Android.
 
 Setup meminta UAC saat pemasangan untuk mendaftarkan tugas Windows. Saat aplikasi dibuka langsung, UAC diminta satu kali untuk sesi aplikasi; daftar proses dan perintah kill kemudian memakai sesi administrator yang sama, tanpa UAC per proses. Proses inti Windows yang dilindungi tidak dapat dihentikan. Jika auto-start diaktifkan, Task Scheduler menjalankan aplikasi saat pengguna masuk dan shortcut Start Menu menjalankan tugas yang sama. Tutup jendela menyembunyikan aplikasi ke system tray.
 

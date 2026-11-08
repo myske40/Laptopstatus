@@ -263,8 +263,11 @@ namespace LaptopStatus
         [StructLayout(LayoutKind.Sequential)]
         private struct PerformanceInformation
         {
+            // The distributed Windows app is win-x64. Use fixed-width fields for native SIZE_T
+            // values so Marshal.SizeOf works consistently on .NET 8 (nuint caused a runtime
+            // marshalling exception on the user's Windows build).
             public uint Size;
-            public nuint CommitTotal, CommitLimit, CommitPeak, PhysicalTotal, PhysicalAvailable, SystemCache, KernelTotal, KernelPaged, KernelNonpaged, PageSize;
+            public ulong CommitTotal, CommitLimit, CommitPeak, PhysicalTotal, PhysicalAvailable, SystemCache, KernelTotal, KernelPaged, KernelNonpaged, PageSize;
             public uint HandleCount, ProcessCount, ThreadCount;
         }
 
@@ -272,6 +275,7 @@ namespace LaptopStatus
         {
             try
             {
+                if (IntPtr.Size != sizeof(ulong)) return null;
                 var info = new PerformanceInformation { Size = (uint)Marshal.SizeOf<PerformanceInformation>() };
                 return GetPerformanceInfo(ref info, info.Size) ? info : null;
             }
@@ -281,7 +285,7 @@ namespace LaptopStatus
                 return null;
             }
         }
-        private static ulong Bytes(nuint pages, nuint pageSize) => checked((ulong)pages * (ulong)pageSize);
+        private static ulong Bytes(ulong pages, ulong pageSize) => checked(pages * pageSize);
         private static int ToInt(object? value) { try { return Convert.ToInt32(value); } catch { return 0; } }
         private static uint ToUInt(object? value) { try { return Convert.ToUInt32(value); } catch { return 0; } }
         private static ulong ToULong(object? value) { try { return Convert.ToUInt64(value); } catch { return 0; } }
