@@ -1,19 +1,36 @@
 # Changelog
 
+## Perubahan terbaru pada `main` — 2026-11-10
+
+Perbaikan yang dipush setelah tag rilis v1.18.24. APK Android untuk pemeriksaan memakai version code 72 dan nama versi 1.18.24; perubahan ini belum diberi tag rilis baru.
+
+### Perbaikan koneksi Android
+
+- Memperbaiki kesalahan sintaks pada skrip UI Android modern yang sebelumnya mencegah bridge `LaptopStatus` dimuat. UI kini dapat menerima status/telemetri, daftar perangkat ditemukan, riwayat, memori/RAMMap, proses, jadwal/rutinitas, kontrol layar, berbagi file/clipboard, terminal jarak jauh, pengaturan kunci aplikasi, Joke Mode, dan hasil troubleshooting dari host.
+- Tombol **Hubungkan** memulai discovery dan menampilkan laptop yang ditemukan untuk dipilih. Dashboard tidak lagi dibuka hanya karena animasi koneksi selesai.
+- **Pindai QR** membuka pemindai Android dan **Atur manual** membuka formulir pairing manual; keduanya tidak lagi berpura-pura berhasil menyambung.
+- Ketika pencarian selesai, status tombol kembali siap dan daftar dapat dipindai ulang. Koneksi nyata tetap memerlukan host Windows yang aktif dan menyetujui pairing.
+- Aksi yang memerlukan host tetap memakai koneksi TLS dan status perangkat nyata: pratinjau/permintaan layar dan sesi shell, transfer file/clipboard, proses, jadwal, keamanan, serta perintah daya. Host offline atau belum dipasangkan menampilkan status/kegagalan, bukan status koneksi palsu.
+
+### Dokumentasi
+
+- README utama sekarang merinci fitur Android, Windows, dan Linux, cara memulai tiap alur utama, batas fitur Linux, dan cara mematikan switch/proteksi.
+- Katalog fitur dan petunjuk penggunaan berdasarkan platform tersedia di [README.md](README.md).
+
 ## v1.18.24 — 2026-11-10
 
-Rilis fitur keamanan kunci aplikasi, pemulihan kontrol RAMMap Android, dan konsol debug LaptopStatus.
+Rilis fitur keamanan kunci aplikasi, pemulihan kontrol RAMMap Android, dan konsol debug LaptopStatus. Fitur berikut melengkapi koneksi pairing, pemantauan, proses, terminal, kendali layar, berbagi, riwayat, jadwal, dan pengaturan yang dijelaskan di README utama.
 
 ### Keamanan aplikasi
 
-- Toggle kunci dengan password dan kunci dengan pertanyaan keamanan kini terpisah di Android dan Windows. Keduanya dapat diaktifkan sendiri-sendiri atau bersamaan.
-- Saat berpindah aplikasi, layar kunci meminta salah satu metode yang diaktifkan. Pengaturan tetap aktif setelah restart sampai kedua toggle dimatikan.
-- Pertanyaan dan jawaban dapat dibuat dari Android atau Windows. Jawaban disimpan sebagai hash bersalt di laptop.
+- Toggle kunci aplikasi dengan password dan dengan pertanyaan keamanan terpisah di **Android → Detail**. Password dapat memakai kredensial khusus LaptopStatus yang disiapkan di Windows; pertanyaan dan jawaban dapat diatur dari kedua aplikasi.
+- Saat berpindah ke aplikasi lain, LaptopStatus meminta salah satu metode yang diaktifkan. Jika keduanya aktif, password atau jawaban dapat membuka kunci. Pilihan tetap tersimpan setelah restart; matikan kedua toggle untuk menonaktifkan kunci aplikasi sepenuhnya.
+- Jawaban keamanan disimpan sebagai hash bersalt di laptop; password akses layar juga disimpan dalam bentuk hash dan dilindungi untuk pemulihan lokal.
 
 ### RAMMap dan debug
 
-- Kontrol RAMMap lama dipulihkan di kartu Memori Android dan menjalankan aksi melalui koneksi aman tanpa meminta UAC. Windows tetap dapat menolak tindakan yang memerlukan elevasi.
-- Konsol Debug LaptopStatus menyediakan preset untuk status, memori, RAMMap, proses, jadwal, rutinitas, berbagi file, tampilan layar, dan tindakan lain melalui pairing TLS.
+- **Detail → Memori → Bersihkan cache RAM** membuka lima aksi: kosongkan working sets, system working set, modified page list, standby list, atau standby priority 0. Perintah dikirim melalui koneksi TLS yang sudah dipasangkan tanpa dialog UAC; Windows dapat menolak operasi yang dibatasi izin sistem. Windows dapat memuat ulang halaman memori dan terasa lambat sementara setelah beberapa aksi.
+- Konsol Debug LaptopStatus menyediakan preset GET untuk status, memori, proses, jadwal/rutinitas, file/clipboard masuk, dan tampilan layar; preset POST meliputi lima aksi RAMMap, kontrol layar, Joke, daya, membuka Notepad/kalkulator, keluar aplikasi, serta memulai terminal. Path dan body JSON dapat disunting. Setiap POST meminta konfirmasi; gunakan hanya terhadap LaptopStatus di perangkat sendiri.
 
 ### Versi dan berkas rilis
 
@@ -21,7 +38,7 @@ Rilis fitur keamanan kunci aplikasi, pemulihan kontrol RAMMap Android, dan konso
 - Windows: 2.11.64
 - Installer Windows: 2.11.64
 - Linux host: 0.1.0 (tidak berubah)
-- Berkas unduhan: APK Android, installer Windows, ZIP installer, Windows portable, konsol debug, dan source Linux.
+- Berkas unduhan: APK Android, installer Windows, Windows portable, konsol debug, dan source Linux.
 
 ## v1.18.23 — 2026-11-10
 
