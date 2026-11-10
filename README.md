@@ -202,6 +202,48 @@ LaptopStatus dilisensikan di bawah [MIT License](LICENSE). Lisensi ini mengizink
 
 AI dipakai agar pengembangan lintas Android, Windows, dan Linux lebih cepat; membantu membaca log dan mencari penyebab bug; serta mempercepat iterasi UI dari laporan dan tangkapan layar. Pengujian pada perangkat dan keputusan produk tetap ditinjau manusia.
 
+#### Mengapa nomor versi kadang melompat atau berbeda
+
+LaptopStatus tidak memakai satu penghitung versi untuk semua platform. Android, aplikasi Windows, installer, konsol debug, dan host Linux memiliki metadata serta jadwal rilis masing-masing. Contoh lompatan rilis yang tercatat adalah Android `1.18.19` ke `1.18.22` dan Windows `2.11.23` ke `2.11.30`; nomor versi installer juga pernah memakai rangkaian berbeda.
+
+Build uji memang tercatat untuk Android `1.18.18` dan Windows `2.11.26`; untuk lompatan angka lainnya, catatan yang tersedia tidak menjelaskan penyebab setiap nomor yang dilewati. Beberapa model AI dan sesi pengembangan mengerjakan bagian aplikasi yang berbeda, dan metadata versi komponen dapat diperbarui secara terpisah. Lompatan angka tidak dengan sendirinya berarti ada fitur yang hilang, dan nomor yang sama juga tidak menjamin dua paket dibuat dari commit yang sama.
+
+| Komponen | Pola versi | Cara membacanya |
+|---|---|---|
+| Android | `1.18.x` | Versi aplikasi Android; angka patch dapat terlewati jika build perantara tidak diterbitkan. |
+| Aplikasi Windows | `2.11.x` | Versi host Windows dengan rangkaian sendiri. |
+| Installer Windows | Rangkaian installer tersendiri | Dapat berbeda dari versi aplikasi Windows yang dipasang. |
+| Konsol debug | Rangkaian paket tersendiri | Cocokkan dengan nama aset dan catatan rilis. |
+| Host Linux | `0.1.x` | Host Linux masih tahap awal dan belum mengikuti nomor Android/Windows. |
+
+`CHANGELOG.md` mencatat versi paket yang benar-benar diterbitkan. Commit pada branch `main` belum tentu menjadi rilis atau menaikkan nomor versi. Untuk memastikan isi paket, cocokkan nomor **About/Info** di aplikasi, nama berkas unduhan, tag rilis, dan entri changelog; bila belum cocok, perlakukan metadata itu sebagai belum tersinkron.
+
+#### Riwayat versi platform
+
+Tabel berikut merangkum nomor versi yang dapat ditemukan dari metadata source, skrip build, changelog, tag, aset GitHub Releases, serta arsip build lokal di drive D yang diperiksa. Rentang yang tidak tercatat sengaja tidak diberi status “gagal” atau “hilang”: tidak ada bukti yang cukup untuk menyimpulkan bahwa build tersebut pernah dibuat lalu gagal atau dihapus.
+
+| Platform | Versi yang tercatat dari awal sampai terbaru | Status berdasarkan bukti yang tersedia |
+|---|---|---|
+| Android | `1.18.1`–`1.18.3`, `1.18.10`, `1.18.12`–`1.18.15`, `1.18.18`, `1.18.19`, `1.18.22`, `1.18.24` | Skrip build lama menyebut `.1`–`.3`, tetapi tidak membuktikan hasilnya berhasil atau dipublikasikan. `.10` ada pada prerelease awal; `.12`–`.15`, `.19`, `.22`, dan `.24` memiliki aset APK di rilis publik; `.18` disebut eksplisit sebagai build uji. `.4`–`.9`, `.11`, `.16`–`.17`, `.20`–`.21`, dan `.23` tidak memiliki aset APK terverifikasi pada daftar rilis yang diperiksa. |
+| Windows | `2.11.13`–`2.11.15`, `2.11.20`–`2.11.23`, `2.11.26`, `2.11.30`–`2.11.31`, `2.11.38`, `2.11.40`, `2.11.60`–`2.11.64` | Skrip build lama menyebut `.13`–`.15`, tanpa bukti aset rilis. `.20` ada pada prerelease awal; `.21`–`.23`, `.30`–`.31`, `.38`, `.40`, dan `.60` memiliki aset aplikasi/portable pada rilis publik; `.26` dicatat sebagai build uji. Berkas Setup lokal di `D:\LaptopStatus-Setup-2.11.61.exe` sampai `.64.exe` membuktikan paket lokal untuk `.61`–`.64`; hanya `.64` terlihat sebagai aset rilis publik. Lompatan rilis Windows meliputi `.23` → `.30`, `.31` → `.38`, `.40` → `.60`, dan `.60` → `.64`; kegagalan build atau penghapusan aset tidak dapat disimpulkan dari nomor yang kosong. |
+| Linux host | `0.1.0` | Versi awal host Linux; paket source tercantum dalam aset rilis publik mulai v1.18.12 dan pada rilis berikutnya. Tidak ada versi Linux lain yang tercatat sampai versi terbaru README ini. |
+
+Pada berkas proyek saat ini, Android menetapkan `versionName 1.18.24` dan `versionCode 72` di `LaptopStatus-AndroidApp/app/build.gradle.kts`; Windows menetapkan `2.11.64` di `LaptopStatus-Version.props`, yang dipakai aplikasi Windows dan installer. Source Linux tidak menyimpan konstanta versi terpisah; `0.1.0` tercantum pada nama paket dan catatan rilis. Folder build di drive D juga berisi paket Windows `2.11.60` di `D:\LaptopStatusBuildTools\LaptopStatus-v1.18.23` dan aset/build lokal yang lebih baru di `D:\LaptopStatusTaskTemp\release-assets`.
+
+Untuk installer, skrip build lama menyebut versi `2.12.4`–`2.12.6`, sedangkan changelog/aset rilis kemudian memakai rangkaian `2.13.1`–`2.13.28`, lalu `2.11.60`–`2.11.64`. Ini menunjukkan nomor installer pernah mengikuti pola yang berbeda dan kemudian disamakan dengan versi Windows; nomor dalam skrip lama sendiri tidak membuktikan publikasi.
+
+Status “tidak tercatat” berarti tidak ditemukan bukti publikasi, bukan bukti pasti bahwa versi itu tidak pernah dibuat. “Build uji” berarti disebut demikian di changelog, “prerelease” berarti GitHub menandainya sebagai prerelease, dan “dipublikasikan” berarti aset paket terlihat pada GitHub Releases. Tidak ada bukti yang ditemukan untuk menyebut versi platform tertentu gagal dibangun atau hilang setelah dipublikasikan. Pemeriksaan daftar rilis dan folder D dilakukan pada 10 November 2026.
+
+#### Catatan tentang model AI
+
+Proyek ini dikerjakan dengan bantuan beberapa model AI dan sesi kerja. Namun Git menyimpan nama maintainer pada commit, bukan model AI yang menulis setiap berkas; repositori ini tidak memiliki catatan model per commit atau per komponen. Gaya kode saja tidak cukup untuk mengidentifikasi model secara akurat karena bahasa pemrograman, konvensi proyek, formatter, revisi manusia, dan proses penyuntingan dapat menghasilkan gaya yang mirip atau berubah.
+
+Karena itu README ini tidak menebak nama model tertentu atau mengklaim suatu file ditulis oleh model tertentu. Daftar nama model yang dapat diverifikasi saat ini: **belum tersedia di metadata repositori**. Nama model baru layak dicantumkan jika ada catatan sesi/build yang menghubungkan model tersebut dengan perubahan tertentu.
+
+#### Tentang nama PT HAHA NASIONAL
+
+**PT HAHA NASIONAL adalah nama fiktif yang sengaja dibuat pengguna sebagai bahan bercanda dan supaya proyek terlihat lebih keren.** Nama itu bukan perusahaan nyata, bukan penerbit atau sponsor resmi, dan tidak menyatakan adanya badan hukum, layanan pelanggan, ataupun hubungan bisnis. Jika nama tersebut tampil di aplikasi, installer, atau materi proyek, anggap saja sebagai identitas bercanda untuk LaptopStatus.
+
 #### Transkrip ringkas proses pembuatan
 
 Ini ringkasan alur pengembangan, bukan salinan kata demi kata dari percakapan:
@@ -409,6 +451,48 @@ LaptopStatus is licensed under the [MIT License](LICENSE). It permits use, modif
 > The app code, interfaces, and project documentation were generated with AI assistance. The user supplied the goals, feature requirements, screenshots, bug reports, and testing feedback, and made product and release decisions.
 
 AI was used to speed up development across Android, Windows, and Linux; help inspect logs and diagnose bugs; and iterate on UI changes from screenshots and reports. A human reviewed device testing and product decisions.
+
+#### Why version numbers sometimes skip or differ
+
+LaptopStatus does not use one version counter for every platform. Android, the Windows app, its installer, the debug console, and the Linux host each have separate version metadata and release schedules. Recorded release jumps include Android `1.18.19` to `1.18.22` and Windows `2.11.23` to `2.11.30`; the installer has also used a separate sequence.
+
+Test builds are explicitly recorded for Android `1.18.18` and Windows `2.11.26`; available records do not explain every other skipped number. Different AI models and work sessions have handled different parts of the project, and component version metadata may have been updated independently. A skipped number alone does not mean a feature was removed, and matching numbers do not guarantee that two packages were built from the same commit.
+
+| Component | Version pattern | How to read it |
+|---|---|---|
+| Android | `1.18.x` | Android app version; patch numbers may be skipped when intermediate builds are not published. |
+| Windows app | `2.11.x` | Windows host version with its own sequence. |
+| Windows installer | Separate installer sequence | May differ from the installed Windows app version. |
+| Debug console | Separate package sequence | Check it against the asset name and release notes. |
+| Linux host | `0.1.x` | Early Linux host; it does not share the Android/Windows numbering. |
+
+`CHANGELOG.md` records the versions that were actually published. A commit on the `main` branch is not automatically a release or a version bump. To identify a package, compare the app's **About/Info** screen, download filename, release tag, and changelog entry; if those disagree, treat the metadata as unsynchronized.
+
+#### Platform version history
+
+This table summarizes platform version numbers found in source metadata, build scripts, the changelog, tags, GitHub Release assets, and the local build archive checked on drive D. Unrecorded ranges are not labeled “failed” or “lost”: there is not enough evidence to conclude that such a build was created and then failed or was removed.
+
+| Platform | Recorded versions from earliest to latest | Status based on available evidence |
+|---|---|---|
+| Android | `1.18.1`–`1.18.3`, `1.18.10`, `1.18.12`–`1.18.15`, `1.18.18`, `1.18.19`, `1.18.22`, `1.18.24` | Older build scripts mention `.1`–`.3` but do not prove successful builds or publication. `.10` appears in the initial prerelease; `.12`–`.15`, `.19`, `.22`, and `.24` have APK assets in public releases; `.18` is explicitly described as a test build. `.4`–`.9`, `.11`, `.16`–`.17`, `.20`–`.21`, and `.23` have no verified APK asset in the checked release list. |
+| Windows | `2.11.13`–`2.11.15`, `2.11.20`–`2.11.23`, `2.11.26`, `2.11.30`–`2.11.31`, `2.11.38`, `2.11.40`, `2.11.60`–`2.11.64` | Older build scripts mention `.13`–`.15`, without evidence of release assets. `.20` appears in the initial prerelease; `.21`–`.23`, `.30`–`.31`, `.38`, `.40`, and `.60` have app/portable assets in public releases; `.26` is recorded as a test build. Local Setup files from `D:\LaptopStatus-Setup-2.11.61.exe` through `.64.exe` prove local packages for `.61`–`.64`; only `.64` appears as a public release asset. Windows release jumps include `.23` → `.30`, `.31` → `.38`, `.40` → `.60`, and `.60` → `.64`; missing numbers alone do not establish build failure or asset removal. |
+| Linux host | `0.1.0` | Initial Linux host version; the source package appears in public release assets starting with v1.18.12 and in subsequent releases. No other Linux version is recorded through the latest README version. |
+
+The current project files set Android to `versionName 1.18.24` and `versionCode 72` in `LaptopStatus-AndroidApp/app/build.gradle.kts`; Windows sets `2.11.64` in `LaptopStatus-Version.props`, which is shared by the Windows app and installer. Linux source has no separate version constant; `0.1.0` is recorded in package names and release notes. The D drive also contains Windows `2.11.60` packages under `D:\LaptopStatusBuildTools\LaptopStatus-v1.18.23` and newer local build assets under `D:\LaptopStatusTaskTemp\release-assets`.
+
+Older build scripts mention installer versions `2.12.4`–`2.12.6`; later changelogs/release assets use `2.13.1`–`2.13.28`, followed by `2.11.60`–`2.11.64`. This shows the installer once used a different version sequence that later aligned with Windows; the old script labels alone do not prove publication.
+
+“Not recorded” means no evidence of publication was found; it does not prove that a version was never built. “Test build” means the changelog explicitly calls it a test build, “prerelease” means GitHub marks it as a prerelease, and “published” means package assets are visible in GitHub Releases. No evidence was found to label a specific platform version as a failed build or as lost after publication. The release list and D drive folders were checked on November 10, 2026.
+
+#### AI model provenance
+
+Several AI models and work sessions have assisted with this project. Git records the maintainer name on commits, not which AI model wrote each file, and this repository has no per-commit or per-component model log. Code style alone cannot reliably identify a model because programming languages, project conventions, formatters, human edits, and iterative revisions can produce similar or changing styles.
+
+For that reason, this README does not guess model names or attribute particular files to specific models. A verifiable model roster is **not currently available in the repository metadata**. Model names should be added only when a session/build record links them to specific changes.
+
+#### About the name PT HAHA NASIONAL
+
+**PT HAHA NASIONAL is a fictional name the user deliberately made up as a joke and to make the project look cooler.** It is not a real company, official publisher, or sponsor, and does not imply a legal entity, customer-support organization, or business relationship. If the name appears in the app, installer, or project materials, treat it as playful LaptopStatus branding.
 
 #### Condensed development transcript
 
