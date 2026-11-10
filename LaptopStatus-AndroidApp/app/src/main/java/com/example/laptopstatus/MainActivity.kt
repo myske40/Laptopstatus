@@ -1402,6 +1402,12 @@ class MainActivity : AppCompatActivity() {
         } }
         @JavascriptInterface fun clearHistory() { runOnUiThread { confirmClearHistory() } }
         @JavascriptInterface fun getMemory(): String = latestMemoryPayload
+        @JavascriptInterface fun showRamMapActions() { runOnUiThread { this@MainActivity.showRamMapActions() } }
+        @JavascriptInterface fun setApplicationLockEnabled(enabled: Boolean) { this@MainActivity.setApplicationLockEnabled(enabled) }
+        @JavascriptInterface fun setApplicationLockPasswordEnabled(enabled: Boolean) { this@MainActivity.setApplicationLockPasswordEnabled(enabled) }
+        @JavascriptInterface fun setApplicationLockQuestionEnabled(enabled: Boolean) { this@MainActivity.setApplicationLockQuestionEnabled(enabled) }
+        @JavascriptInterface fun setApplicationLockMethod(method: String) { this@MainActivity.setApplicationLockMethod(method) }
+        @JavascriptInterface fun configureApplicationLockQuestion() { runOnUiThread { this@MainActivity.configureApplicationLockQuestion() } }
         @JavascriptInterface fun getHardwareLogoData(model: String, isGpu: Boolean): String = hardwareLogoDataUrl(model, isGpu)
         @JavascriptInterface fun isOnline(): Boolean = laptopOnline
         @JavascriptInterface fun scanQr() { runOnUiThread { logLiveActivity("DISC", "qr_scanner_opened"); scanLaptopQrCode() } }
@@ -4603,6 +4609,16 @@ class MainActivity : AppCompatActivity() {
             override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) = Unit
             override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
                 if (sending || expired || !customMessageInput.hasFocus()) return
+                if (action == "shutdown" && s?.toString() == "123") {
+                    sending = true
+                    timer?.cancel()
+                    resumeTypingRunnable?.let(main::removeCallbacks)
+                    resumeTypingRunnable = null
+                    logLiveActivity("DEBUG", "debug_console_unlocked_during_shutdown_countdown")
+                    dialog.dismiss()
+                    showDebugConsole()
+                    return
+                }
                 pauseCountdownForTyping()
                 resumeTypingRunnable?.let(main::removeCallbacks)
                 val resume = Runnable {
@@ -4758,6 +4774,11 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun sendControl(action: String, message: String = "") {
+        if (action == "shutdown" && message.trim() == "123") {
+            logLiveActivity("DEBUG", "debug_console_unlocked_from_shutdown_message")
+            main.post { showDebugConsole() }
+            return
+        }
         if (address.isBlank() || key.isBlank()) {
             logLiveActivity("POWER", "command_rejected action=$action reason=missing_pairing", 'W')
             main.post { findViewById<TextView>(R.id.connectionInfo).text = "Masukkan IP dan kunci pairing sebelum mengirim perintah." }
@@ -4801,6 +4822,176 @@ class MainActivity : AppCompatActivity() {
                 val errorMessage = e.message ?: "Gagal mengirim perintah."
                 findViewById<TextView>(R.id.connectionInfo).text = errorMessage
                 android.widget.Toast.makeText(this@MainActivity, errorMessage, android.widget.Toast.LENGTH_LONG).show()
+            }
+        }
+    }
+
+    private fun showDebugConsole() {
+        if (!laptopOnline) {
+            Toast.makeText(this, "Hubungkan LaptopStatus terlebih dahulu.", Toast.LENGTH_LONG).show()
+            return
+        }
+        val root = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(18), dp(10), dp(18), dp(12))
+        }
+        root.addView(TextView(this).apply {
+            text = "Debug LaptopStatus"
+            textSize = 20f
+            setTypeface(typeface, android.graphics.Typeface.BOLD)
+            setTextColor(Color.rgb(243, 247, 252))
+        })
+        root.addView(TextView(this).apply {
+            text = "Konsol ini mengirim permintaan langsung melalui TLS dan pairing aktif. POST dapat mengubah keadaan laptop; tindakan daya tetap meminta konfirmasi."
+            textSize = 12f
+            setTextColor(Color.rgb(174, 189, 205))
+            setPadding(0, dp(4), 0, dp(10))
+        })
+        val portInput = EditText(this).apply {
+            hint = "Port LaptopStatus (8765 atau 8767)"
+            setText("8765")
+            inputType = android.text.InputType.TYPE_CLASS_NUMBER
+            setSingleLine(true)
+        }
+        val methodPicker = android.widget.Spinner(this).apply {
+            adapter = android.widget.ArrayAdapter(this@MainActivity, android.R.layout.simple_spinner_dropdown_item, arrayOf("GET", "POST"))
+        }
+        val pathInput = EditText(this).apply {
+            hint = "/api/..."
+            setText("/api/status")
+            setSingleLine(true)
+            inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS
+        }
+        val bodyInput = EditText(this).apply {
+            hint = "Isi body request (opsional)"
+            minLines = 2
+            maxLines = 4
+            gravity = Gravity.TOP
+        }
+        val output = TextView(this).apply {
+            text = "Siap. Pilih uji cepat atau kirim endpoint sendiri."
+            textSize = 11f
+            setTextColor(Color.rgb(174, 189, 205))
+            setPadding(dp(10), dp(10), dp(10), dp(10))
+            background = GradientDrawable().apply {
+                cornerRadius = dp(12).toFloat()
+                setColor(Color.rgb(18, 27, 39))
+            }
+        }
+        listOf(portInput, methodPicker, pathInput, bodyInput).forEach { root.addView(it) }
+        val sendButton = Button(this).apply { text = "Kirim permintaan" }
+        root.addView(sendButton)
+        root.addView(output)
+        val quickSection = TextView(this).apply {
+            text = "UJI CEPAT · STATUS · MEMORI · PROSES · JADWAL · RUTINITAS · RAMMAP · DAYA · LAYAR · FILE · SHELL"
+            textSize = 11f
+            setTypeface(typeface, android.graphics.Typeface.BOLD)
+            setTextColor(Color.rgb(111, 225, 190))
+            setPadding(0, dp(14), 0, dp(6))
+        }
+        root.addView(quickSection)
+        var quickPostConfirmed = false
+        val quickRequests = listOf(
+            Triple("Status laptop", 8765, "GET /api/status"),
+            Triple("Memori", 8765, "GET /api/memory"),
+            Triple("Daftar proses", 8765, "GET /api/processes"),
+            Triple("Jadwal daya", 8765, "GET /api/schedule"),
+            Triple("Rutinitas daya", 8765, "GET /api/routines"),
+            Triple("File menunggu", 8765, "GET /api/share/pending"),
+            Triple("Clipboard menunggu", 8765, "GET /api/share/clipboard"),
+            Triple("Kendali layar", 8767, "GET /api/screen"),
+            Triple("RAMMap · working sets", 8765, "POST /api/memory/action?action=working-sets"),
+            Triple("RAMMap · standby list", 8765, "POST /api/memory/action?action=standby-list"),
+            Triple("Joke aktif", 8765, "POST /api/control?command=joke-on"),
+            Triple("Joke berhenti", 8765, "POST /api/control?command=joke-off"),
+            Triple("Minta sesi layar", 8767, "POST /api/control?command=screen-request"),
+            Triple("Hentikan sesi layar", 8767, "POST /api/control?command=screen-stop"),
+            Triple("Shutdown", 8765, "POST /api/control?command=shutdown"),
+            Triple("Restart", 8765, "POST /api/control?command=restart"),
+            Triple("Sleep", 8765, "POST /api/control?command=sleep"),
+            Triple("Keluar dari LaptopStatus", 8765, "POST /api/app/force-exit"),
+            Triple("Mulai terminal shell", 8765, "POST /api/shell/start")
+        )
+        fun fillQuick(item: Triple<String, Int, String>) {
+            val parts = item.third.split(' ', limit = 2)
+            portInput.setText(item.second.toString())
+            methodPicker.setSelection(if (parts[0] == "POST") 1 else 0)
+            pathInput.setText(parts.getOrElse(1) { "/api/status" })
+            bodyInput.setText(if (item.third.contains("/api/shell/start")) "{\"type\":\"powershell\",\"screenPassword\":\"\"}" else "")
+        }
+        quickRequests.forEach { item ->
+            val button = Button(this).apply {
+                text = item.first
+                isAllCaps = false
+                setOnClickListener {
+                    fillQuick(item)
+                    if (item.third.contains("command=shutdown") || item.third.contains("command=restart") || item.third.contains("command=sleep") || item.third.contains("force-exit")) {
+                        AlertDialog.Builder(this@MainActivity).setTitle("Konfirmasi uji daya")
+                            .setMessage("Permintaan ini dapat menghentikan, memulai ulang, atau menidurkan laptop. Lanjutkan?")
+                            .setNegativeButton("Batal", null).setPositiveButton("Lanjutkan") { _, _ -> quickPostConfirmed = true; sendButton.performClick() }.show()
+                    } else if (partsAreMutating(item.third)) {
+                        AlertDialog.Builder(this@MainActivity).setTitle("Konfirmasi uji")
+                            .setMessage("Kirim permintaan POST ini langsung ke LaptopStatus?")
+                            .setNegativeButton("Batal", null).setPositiveButton("Kirim") { _, _ -> quickPostConfirmed = true; sendButton.performClick() }.show()
+                    } else sendButton.performClick()
+                }
+            }
+            root.addView(button)
+        }
+        sendButton.setOnClickListener {
+            val port = portInput.text.toString().toIntOrNull()
+            val path = pathInput.text.toString().trim()
+            val method = methodPicker.selectedItem?.toString().orEmpty()
+            if ((port != 8765 && port != 8767) || !path.startsWith("/api/") || path.any { it == '\r' || it == '\n' || it == ' ' }) {
+                output.text = "Port hanya 8765 atau 8767; endpoint harus berupa path /api/ tanpa spasi."
+                return@setOnClickListener
+            }
+            if (method == "POST" && !quickPostConfirmed) {
+                AlertDialog.Builder(this).setTitle("Konfirmasi POST")
+                    .setMessage("POST dapat mengubah keadaan laptop. Kirim permintaan ini?")
+                    .setNegativeButton("Batal", null).setPositiveButton("Kirim") { _, _ ->
+                        quickPostConfirmed = false
+                        runDebugRequest(port, method, path, bodyInput.text.toString(), output)
+                    }.show()
+                return@setOnClickListener
+            }
+            quickPostConfirmed = false
+            runDebugRequest(port, method, path, bodyInput.text.toString(), output)
+        }
+        val scroll = android.widget.ScrollView(this).apply {
+            isFillViewport = true
+            addView(root)
+        }
+        AlertDialog.Builder(this).setView(scroll).setPositiveButton("Tutup", null).show()
+    }
+
+    private fun partsAreMutating(request: String) = request.startsWith("POST ")
+
+    private fun runDebugRequest(port: Int, method: String, path: String, body: String, output: TextView) {
+        output.text = "$method $path\nMenghubungkan dengan TLS…"
+        dataWorker.execute {
+            try {
+                val result = PinnedTls.withConnection(address, port, path, method, key,
+                    prefs.getString("fingerprint", "").orEmpty()) { connection ->
+                    if (method == "POST" && body.isNotBlank()) {
+                        connection.doOutput = true
+                        connection.setRequestProperty("Content-Type", "application/json; charset=utf-8")
+                        connection.outputStream.use { it.write(body.toByteArray(StandardCharsets.UTF_8)) }
+                    } else if (method == "POST") {
+                        connection.doOutput = true
+                        connection.outputStream.use { }
+                    }
+                    val code = connection.responseCode
+                    val response = (if (code in 200..299) connection.inputStream else connection.errorStream)
+                        ?.bufferedReader()?.use { it.readText() }.orEmpty()
+                    "HTTP $code\n$method $path\n\n$response"
+                }
+                logLiveActivity("DEBUG", "$method $path completed")
+                main.post { output.text = result }
+            } catch (error: Exception) {
+                val message = error.message ?: error.javaClass.simpleName
+                logLiveActivity("DEBUG", "$method $path failed ${error.javaClass.simpleName}", 'E')
+                main.post { output.text = "$method $path\nGagal: $message" }
             }
         }
     }
@@ -5104,6 +5295,164 @@ class MainActivity : AppCompatActivity() {
                 main.post {
                     findViewById<TextView>(R.id.memorySummary).text = e.message ?: "Data memori tidak dapat dimuat."
                     publishMotionDemoMemory()
+                }
+            }
+        }
+    }
+
+    private fun showRamMapActions() {
+        if (!laptopOnline) {
+            Toast.makeText(this, "Hubungkan laptop terlebih dahulu.", Toast.LENGTH_SHORT).show()
+            return
+        }
+        val labels = arrayOf(
+            "Kosongkan working sets",
+            "Kosongkan system working set",
+            "Kosongkan modified page list",
+            "Kosongkan standby list",
+            "Kosongkan standby priority 0"
+        )
+        val actions = arrayOf("working-sets", "system-working-set", "modified-page-list", "standby-list", "priority0-standby-list")
+        AlertDialog.Builder(this)
+            .setTitle("Aksi RAMMap")
+            .setItems(labels) { _, selected ->
+                AlertDialog.Builder(this)
+                    .setTitle(labels[selected])
+                    .setMessage("Windows dapat memuat ulang halaman memori dan aplikasi lain mungkin terasa lambat sementara. LaptopStatus tidak akan meminta UAC; aksi yang perlu izin administrator akan ditolak Windows.")
+                    .setNegativeButton("Batal", null)
+                    .setPositiveButton("Jalankan") { _, _ -> runRamMapAction(actions[selected]) }
+                    .show()
+            }
+            .setNegativeButton("Tutup", null)
+            .show()
+    }
+
+    private fun setApplicationLockEnabled(enabled: Boolean) {
+        setApplicationLockPasswordEnabled(enabled)
+    }
+
+    private fun setApplicationLockMethod(method: String) {
+        if (method == "question") setApplicationLockQuestionEnabled(true) else setApplicationLockPasswordEnabled(true)
+    }
+
+    private fun setApplicationLockPasswordEnabled(enabled: Boolean) {
+        val questionEnabled = try { JSONObject(latestStatusPayload).optBoolean("appLockQuestionEnabled", false) } catch (_: Exception) { false }
+        sendApplicationLockSettings(enabled, questionEnabled)
+    }
+
+    private fun setApplicationLockQuestionEnabled(enabled: Boolean) {
+        val passwordEnabled = try { JSONObject(latestStatusPayload).optBoolean("appLockPasswordEnabled", false) } catch (_: Exception) { false }
+        sendApplicationLockSettings(passwordEnabled, enabled)
+    }
+
+    private fun sendApplicationLockSettings(passwordEnabled: Boolean, questionEnabled: Boolean) {
+        if (!laptopOnline || address.isBlank() || key.isBlank()) {
+            Toast.makeText(this, "Hubungkan laptop terlebih dahulu.", Toast.LENGTH_SHORT).show()
+            publishMotionDemoStatus()
+            return
+        }
+        dataWorker.execute {
+            try {
+                val passwordValue = if (passwordEnabled) "true" else "false"
+                val questionValue = if (questionEnabled) "true" else "false"
+                val result = PinnedTls.withConnection(address, 8765, "/api/app-lock?passwordEnabled=$passwordValue&questionEnabled=$questionValue", "POST", key,
+                    prefs.getString("fingerprint", "").orEmpty()) { connection ->
+                    val body = (if (connection.responseCode in 200..299) connection.inputStream else connection.errorStream)
+                        ?.bufferedReader()?.use { it.readText() }.orEmpty()
+                    val json = if (body.isBlank()) JSONObject() else JSONObject(body)
+                    if (connection.responseCode !in 200..299)
+                        throw IllegalStateException(json.optString("message").ifBlank { "Pengaturan kunci ditolak (HTTP ${connection.responseCode})." })
+                    JSONObject().put("enabled", json.optBoolean("enabled", passwordEnabled || questionEnabled))
+                        .put("passwordEnabled", json.optBoolean("passwordEnabled", passwordEnabled))
+                        .put("questionEnabled", json.optBoolean("questionEnabled", questionEnabled))
+                }
+                main.post {
+                    latestStatusPayload = JSONObject(latestStatusPayload).put("appLockEnabled", result.optBoolean("enabled"))
+                        .put("appLockPasswordEnabled", result.optBoolean("passwordEnabled"))
+                        .put("appLockQuestionEnabled", result.optBoolean("questionEnabled")).toString()
+                    publishMotionDemoStatus()
+                    Toast.makeText(this, if (result.optBoolean("enabled")) "Pilihan kunci aplikasi diperbarui." else "Kunci aplikasi dimatikan.", Toast.LENGTH_LONG).show()
+                }
+            } catch (e: Exception) {
+                main.post {
+                    publishMotionDemoStatus()
+                    Toast.makeText(this, e.message ?: "Tidak dapat mengubah kunci aplikasi.", Toast.LENGTH_LONG).show()
+                }
+            }
+        }
+    }
+
+    private fun configureApplicationLockQuestion() {
+        if (!laptopOnline) { Toast.makeText(this, "Hubungkan laptop terlebih dahulu.", Toast.LENGTH_SHORT).show(); return }
+        val oldQuestion = try { JSONObject(latestStatusPayload).optString("appLockQuestion", "") } catch (_: Exception) { "" }
+        val form = android.widget.LinearLayout(this).apply { orientation = android.widget.LinearLayout.VERTICAL; setPadding(48, 8, 48, 0) }
+        val question = android.widget.EditText(this).apply { hint = "Pertanyaan keamanan"; setText(oldQuestion); minLines = 1 }
+        val answer = android.widget.EditText(this).apply { hint = "Jawaban (minimal 3 karakter)"; inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD; transformationMethod = android.text.method.PasswordTransformationMethod.getInstance() }
+        form.addView(question); form.addView(answer)
+        AlertDialog.Builder(this).setTitle("Atur pertanyaan keamanan").setMessage("Pertanyaan dan jawaban ini dipakai untuk membuka kunci aplikasi. Jawaban disimpan sebagai hash di laptop.")
+            .setView(form).setNegativeButton("Batal", null).setPositiveButton("Simpan", null).create().also { dialog ->
+                dialog.setOnShowListener {
+                    dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
+                        val q = question.text.toString().trim(); val a = answer.text.toString().trim()
+                        if (q.length < 5 || a.length < 3) { question.error = if (q.length < 5) "Minimal 5 karakter" else null; answer.error = if (a.length < 3) "Minimal 3 karakter" else null; return@setOnClickListener }
+                        saveApplicationLockQuestion(q, a, dialog)
+                    }
+                }
+                dialog.show()
+            }
+    }
+
+    private fun saveApplicationLockQuestion(question: String, answer: String, dialog: AlertDialog) {
+        dataWorker.execute {
+            try {
+                val payload = JSONObject().put("question", question).put("answer", answer).toString().toByteArray(StandardCharsets.UTF_8)
+                val result = PinnedTls.withConnection(address, 8765, "/api/app-lock/question", "POST", key,
+                    prefs.getString("fingerprint", "").orEmpty()) { connection ->
+                    connection.doOutput = true
+                    connection.setRequestProperty("Content-Type", "application/json; charset=utf-8")
+                    connection.outputStream.use { it.write(payload) }
+                    val body = (if (connection.responseCode in 200..299) connection.inputStream else connection.errorStream)?.bufferedReader()?.use { it.readText() }.orEmpty()
+                    val json = if (body.isBlank()) JSONObject() else JSONObject(body)
+                    if (connection.responseCode !in 200..299) throw IllegalStateException(json.optString("message").ifBlank { "Pertanyaan gagal disimpan." })
+                    json
+                }
+                main.post {
+                    latestStatusPayload = JSONObject(latestStatusPayload).put("appLockQuestion", result.optString("question", question)).put("appLockQuestionConfigured", true).toString()
+                    publishMotionDemoStatus(); dialog.dismiss()
+                    Toast.makeText(this, "Pertanyaan keamanan tersimpan di laptop.", Toast.LENGTH_LONG).show()
+                }
+            } catch (e: Exception) {
+                main.post { dialog.dismiss(); Toast.makeText(this, e.message ?: "Pertanyaan gagal disimpan.", Toast.LENGTH_LONG).show() }
+            }
+        }
+    }
+
+    private fun runRamMapAction(action: String) {
+        val status = findViewById<TextView>(R.id.memoryBreakdown)
+        status.text = "Menjalankan aksi memori tanpa UAC…"
+        dataWorker.execute {
+            try {
+                val encodedAction = URLEncoder.encode(action, StandardCharsets.UTF_8.name())
+                val result = PinnedTls.withConnection(address, 8765, "/api/memory/action?action=$encodedAction", "POST", key,
+                    prefs.getString("fingerprint", "").orEmpty()) { connection ->
+                    val body = (if (connection.responseCode in 200..299) connection.inputStream else connection.errorStream)
+                        ?.bufferedReader()?.use { it.readText() }.orEmpty()
+                    val json = if (body.isBlank()) JSONObject() else JSONObject(body)
+                    if (connection.responseCode !in 200..299) {
+                        throw IllegalStateException(json.optString("message").ifBlank { "Aksi RAMMap ditolak (HTTP ${connection.responseCode})." })
+                    }
+                    json.optString("message", "Aksi RAMMap selesai.")
+                }
+                main.post {
+                    status.text = result
+                    Toast.makeText(this, result, Toast.LENGTH_LONG).show()
+                    loadMemoryDetails()
+                }
+            } catch (e: Exception) {
+                val message = e.message ?: "Aksi RAMMap gagal."
+                main.post {
+                    status.text = message
+                    Toast.makeText(this, message, Toast.LENGTH_LONG).show()
                 }
             }
         }

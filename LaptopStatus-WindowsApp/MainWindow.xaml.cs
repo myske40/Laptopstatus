@@ -106,6 +106,25 @@ namespace LaptopStatus
         private byte[] _screenAccessHash = Array.Empty<byte>();
         private int _loadedScreenPasswordIterations = ScreenPasswordIterations;
         private volatile bool _screenPasswordAccessEnabled;
+        private bool _appLockEnabled;
+        private bool _passwordAppLockEnabled;
+        private bool _questionAppLockEnabled;
+        private string _appLockMethod = "password";
+        private string _screenAccessQuestion = "";
+        private string _pendingScreenAccessQuestion = "";
+        private string _pendingScreenAccessAnswer = "";
+        private byte[] _screenAnswerSalt = Array.Empty<byte>();
+        private byte[] _screenAnswerHash = Array.Empty<byte>();
+        private int _screenAnswerIterations = ScreenPasswordIterations;
+        private UserLockWindow? _userLockWindow;
+        private readonly DispatcherTimer _appLockTimer = new() { Interval = TimeSpan.FromMilliseconds(350) };
+        private int _authorizedForegroundProcessId;
+        private bool _appLockPrimed;
+        private readonly string _appLockSettingsPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "LaptopStatus", "app-lock.json");
+        private readonly string _appLockQuestionPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "LaptopStatus", "app-lock-question.json");
+
+        [DllImport("user32.dll")] private static extern IntPtr GetForegroundWindow();
+        [DllImport("user32.dll")] private static extern uint GetWindowThreadProcessId(IntPtr hwnd, out uint processId);
         private bool _allowExit;
         private bool _processRefreshInProgress;
         private int? _armedProcessKillPid;
@@ -268,6 +287,7 @@ namespace LaptopStatus
             PairingKeyText.Text = _pairingKey;
             CertificateFingerprintText.Text = Convert.ToHexString(SHA256.HashData(_screenCertificate.RawData));
             LoadScreenAccessSettings();
+            LoadApplicationLockQuestion();
             UnattendedAccessToggle.IsChecked = _screenPasswordAccessEnabled;
             ScreenAccessStatus.Text = _screenPasswordAccessEnabled
                 ? "Akses password tersimpan di PC ini dan aktif untuk akun Windows ini. Android harus sudah dipasangkan."
@@ -347,6 +367,19 @@ namespace LaptopStatus
                 if (_screenControlActive && DateTimeOffset.UtcNow >= _screenControlExpires) StopScreenSession();
             };
             _screenSessionTimer.Start();
+            try
+            {
+                using var appLockSettings = JsonDocument.Parse(File.ReadAllText(_appLockSettingsPath));
+                _appLockEnabled = appLockSettings.RootElement.GetProperty("enabled").GetBoolean();
+                _appLockMethod = appLockSettings.RootElement.TryGetProperty("method", out var methodValue) && methodValue.GetString() == "question" ? "question" : "password";
+                if (appLockSettings.RootElement.TryGetProperty("passwordEnabled", out var passwordToggle)) _passwordAppLockEnabled = passwordToggle.GetBoolean();
+                else _passwordAppLockEnabled = _appLockEnabled && _appLockMethod == "password";
+                if (appLockSettings.RootElement.TryGetProperty("questionEnabled", out var questionToggle)) _questionAppLockEnabled = questionToggle.GetBoolean();
+                else _questionAppLockEnabled = _appLockEnabled && _appLockMethod == "question";
+            }
+            catch { _appLockEnabled = false; _appLockMethod = "password"; _passwordAppLockEnabled = false; _questionAppLockEnabled = false; }
+            _appLockTimer.Tick += (_, _) => CheckApplicationLock();
+            if (_appLockEnabled) { _appLockPrimed = true; _appLockTimer.Start(); Dispatcher.BeginInvoke(new Action(() => RequireApplicationPassword()), DispatcherPriority.ApplicationIdle); }
             _cloudflareSettings = LoadCloudflareTunnelSettings();
             if (_cloudflareSettings is not null)
             {
@@ -1137,7 +1170,9 @@ namespace LaptopStatus
             catch { }
         }
 
-        private sealed record ScreenAccessSettings(bool Enabled, string Salt, string PasswordHash, int Iterations, string? ProtectedPassword = null);
+        private sealed record ScreenAccessSettings(bool Enabled, string Salt, string PasswordHash, int Iterations, string? ProtectedPassword = null,
+            string Question = "", string AnswerSalt = "", string AnswerHash = "", int AnswerIterations = 0);
+        private sealed record AppLockQuestionSettings(string Question, string Salt, string Hash, int Iterations);
 
         [StructLayout(LayoutKind.Sequential)]
         private struct DataBlob
@@ -1209,6 +1244,10 @@ namespace LaptopStatus
                     throw new InvalidDataException("Pengaturan akses password tidak valid.");
                 _screenAccessSalt = salt;
                 _screenAccessHash = hash;
+                _screenAccessQuestion = settings.Question ?? "";
+                _screenAnswerSalt = string.IsNullOrEmpty(settings.AnswerSalt) ? Array.Empty<byte>() : Convert.FromBase64String(settings.AnswerSalt);
+                _screenAnswerHash = string.IsNullOrEmpty(settings.AnswerHash) ? Array.Empty<byte>() : Convert.FromBase64String(settings.AnswerHash);
+                _screenAnswerIterations = settings.AnswerIterations is >= 100000 and <= 1000000 ? settings.AnswerIterations : ScreenPasswordIterations;
                 _loadedScreenPasswordIterations = settings.Iterations;
                 _screenPasswordAccessEnabled = true;
                 if (!string.IsNullOrWhiteSpace(settings.ProtectedPassword))
@@ -1247,7 +1286,7 @@ namespace LaptopStatus
             File.Move(temporaryPath, _screenAccessSettingsPath, overwrite: true);
         }
 
-        private static ScreenAccessSettings CreateScreenAccessSettings(string password)
+        private static ScreenAccessSettings CreateScreenAccessSettings(string password, string question, string answer, ScreenAccessSettings? previous = null)
         {
             var salt = RandomNumberGenerator.GetBytes(16);
             var passwordBytes = Encoding.UTF8.GetBytes(password);
@@ -1256,8 +1295,30 @@ namespace LaptopStatus
             {
                 var hash = Rfc2898DeriveBytes.Pbkdf2(passwordBytes, salt, ScreenPasswordIterations, HashAlgorithmName.SHA256, 32);
                 protectedBytes = ProtectForCurrentWindowsUser(passwordBytes);
+                string savedQuestion, savedAnswerSalt, savedAnswerHash;
+                int savedAnswerIterations;
+                if (string.IsNullOrWhiteSpace(question) && string.IsNullOrWhiteSpace(answer))
+                {
+                    savedQuestion = previous?.Question ?? ""; savedAnswerSalt = previous?.AnswerSalt ?? "";
+                    savedAnswerHash = previous?.AnswerHash ?? ""; savedAnswerIterations = previous?.AnswerIterations ?? 0;
+                }
+                else
+                {
+                    if (string.IsNullOrWhiteSpace(question) || answer.Trim().Length < 3)
+                        throw new ArgumentException("Isi pertanyaan dan jawaban minimal 3 karakter, atau kosongkan keduanya.");
+                    var answerSalt = RandomNumberGenerator.GetBytes(16);
+                    var answerBytes = Encoding.UTF8.GetBytes(answer.Trim().ToUpperInvariant());
+                    try
+                    {
+                        var answerHash = Rfc2898DeriveBytes.Pbkdf2(answerBytes, answerSalt, ScreenPasswordIterations, HashAlgorithmName.SHA256, 32);
+                        savedQuestion = question.Trim(); savedAnswerSalt = Convert.ToBase64String(answerSalt);
+                        savedAnswerHash = Convert.ToBase64String(answerHash); savedAnswerIterations = ScreenPasswordIterations;
+                        CryptographicOperations.ZeroMemory(answerHash);
+                    }
+                    finally { CryptographicOperations.ZeroMemory(answerBytes); CryptographicOperations.ZeroMemory(answerSalt); }
+                }
                 return new ScreenAccessSettings(true, Convert.ToBase64String(salt), Convert.ToBase64String(hash), ScreenPasswordIterations,
-                    Convert.ToBase64String(protectedBytes));
+                    Convert.ToBase64String(protectedBytes), savedQuestion, savedAnswerSalt, savedAnswerHash, savedAnswerIterations);
             }
             finally
             {
@@ -1295,6 +1356,139 @@ namespace LaptopStatus
             }
         }
 
+        private bool VerifyScreenAccessAnswer(string answer)
+        {
+            if (_screenAnswerHash.Length != 32 || _screenAnswerSalt.Length != 16 || answer.Trim().Length < 3) return false;
+            lock (_screenPasswordGate)
+            {
+                var now = DateTimeOffset.UtcNow;
+                while (_screenPasswordFailures.TryPeek(out var failedAt) && now - failedAt >= TimeSpan.FromMinutes(1)) _screenPasswordFailures.Dequeue();
+                if (_screenPasswordFailures.Count >= MaxScreenPasswordFailuresPerMinute) return false;
+                var bytes = Encoding.UTF8.GetBytes(answer.Trim().ToUpperInvariant());
+                byte[]? hash = null;
+                try
+                {
+                    hash = Rfc2898DeriveBytes.Pbkdf2(bytes, _screenAnswerSalt, _screenAnswerIterations, HashAlgorithmName.SHA256, _screenAnswerHash.Length);
+                    var valid = CryptographicOperations.FixedTimeEquals(hash, _screenAnswerHash);
+                    if (valid) _screenPasswordFailures.Clear(); else _screenPasswordFailures.Enqueue(now);
+                    return valid;
+                }
+                finally { CryptographicOperations.ZeroMemory(bytes); if (hash is not null) CryptographicOperations.ZeroMemory(hash); }
+            }
+        }
+
+        private void SaveScreenAccessQuestion(string question, string answer)
+        {
+            if (string.IsNullOrWhiteSpace(question) || question.Trim().Length < 5 || answer.Trim().Length < 3)
+                throw new ArgumentException("Isi pertanyaan minimal 5 karakter dan jawaban minimal 3 karakter.");
+            var salt = RandomNumberGenerator.GetBytes(16);
+            var bytes = Encoding.UTF8.GetBytes(answer.Trim().ToUpperInvariant());
+            byte[]? hash = null;
+            try
+            {
+                hash = Rfc2898DeriveBytes.Pbkdf2(bytes, salt, ScreenPasswordIterations, HashAlgorithmName.SHA256, 32);
+                var settings = new AppLockQuestionSettings(question.Trim(), Convert.ToBase64String(salt), Convert.ToBase64String(hash), ScreenPasswordIterations);
+                var directory = Path.GetDirectoryName(_appLockQuestionPath)!;
+                Directory.CreateDirectory(directory);
+                var temporaryPath = _appLockQuestionPath + ".tmp";
+                File.WriteAllText(temporaryPath, JsonSerializer.Serialize(settings));
+                File.Move(temporaryPath, _appLockQuestionPath, overwrite: true);
+                _screenAccessQuestion = settings.Question;
+                _screenAnswerSalt = salt.ToArray(); _screenAnswerHash = hash.ToArray(); _screenAnswerIterations = ScreenPasswordIterations;
+            }
+            finally { CryptographicOperations.ZeroMemory(bytes); CryptographicOperations.ZeroMemory(salt); if (hash is not null) CryptographicOperations.ZeroMemory(hash); }
+        }
+
+        private void LoadApplicationLockQuestion()
+        {
+            try
+            {
+                if (!File.Exists(_appLockQuestionPath)) return;
+                var settings = JsonSerializer.Deserialize<AppLockQuestionSettings>(File.ReadAllText(_appLockQuestionPath));
+                if (settings is null || settings.Question.Length < 5 || settings.Iterations is < 100000 or > 1000000) return;
+                var salt = Convert.FromBase64String(settings.Salt); var hash = Convert.FromBase64String(settings.Hash);
+                if (salt.Length != 16 || hash.Length != 32) return;
+                _screenAccessQuestion = settings.Question; _screenAnswerSalt = salt; _screenAnswerHash = hash; _screenAnswerIterations = settings.Iterations;
+            }
+            catch { _screenAccessQuestion = ""; _screenAnswerSalt = Array.Empty<byte>(); _screenAnswerHash = Array.Empty<byte>(); }
+        }
+
+        private void SetApplicationLockEnabled(bool enabled)
+        {
+            SetApplicationLockMethodEnabled(_appLockMethod, enabled);
+        }
+
+        private void SetApplicationLockMethodEnabled(string method, bool enabled)
+        {
+            if (enabled && (method == "question" ? _screenAnswerHash.Length != 32 : !_screenPasswordAccessEnabled))
+            {
+                _ = PushClaudeNoticeAsync(method == "question" ? "Atur pertanyaan dan jawaban terlebih dahulu." : "Simpan password akses layar terlebih dahulu.");
+                return;
+            }
+            SetApplicationLockStates(method == "question" ? _passwordAppLockEnabled : enabled,
+                method == "question" ? enabled : _questionAppLockEnabled);
+        }
+
+        private void SetApplicationLockStates(bool passwordEnabled, bool questionEnabled)
+        {
+            if (passwordEnabled && !_screenPasswordAccessEnabled || questionEnabled && _screenAnswerHash.Length != 32)
+                throw new InvalidOperationException("Simpan kredensial untuk metode kunci yang dipilih terlebih dahulu.");
+            _passwordAppLockEnabled = passwordEnabled;
+            _questionAppLockEnabled = questionEnabled;
+            _appLockEnabled = _passwordAppLockEnabled || _questionAppLockEnabled;
+            Directory.CreateDirectory(Path.GetDirectoryName(_appLockSettingsPath)!);
+            File.WriteAllText(_appLockSettingsPath, JsonSerializer.Serialize(new { enabled = _appLockEnabled, method = _appLockMethod,
+                passwordEnabled = _passwordAppLockEnabled, questionEnabled = _questionAppLockEnabled }));
+            if (_appLockEnabled)
+            {
+                _authorizedForegroundProcessId = 0;
+                _appLockPrimed = true;
+                _appLockTimer.Start();
+                RequireApplicationPassword();
+            }
+            else
+            {
+                _appLockTimer.Stop();
+                _appLockPrimed = false;
+                _userLockWindow?.Dispatcher.BeginInvoke(new Action(() => _userLockWindow?.AuthorizeAndClose()));
+            }
+        }
+
+        private void CheckApplicationLock()
+        {
+            if (!_appLockEnabled || !CanUnlockApplication || _userLockWindow is { IsVisible: true }) return;
+            var hwnd = GetForegroundWindow();
+            if (hwnd == IntPtr.Zero) return;
+            GetWindowThreadProcessId(hwnd, out var rawPid);
+            var pid = unchecked((int)rawPid);
+            if (pid <= 0 || pid == Environment.ProcessId) return;
+            if (!_appLockPrimed) { _authorizedForegroundProcessId = pid; _appLockPrimed = true; return; }
+            if (_authorizedForegroundProcessId != pid) RequireApplicationPassword();
+        }
+
+        private void RequireApplicationPassword()
+        {
+            if (!_appLockEnabled || !CanUnlockApplication || _userLockWindow is { IsVisible: true }) return;
+            var hwnd = GetForegroundWindow();
+            var targetProcessId = _authorizedForegroundProcessId;
+            if (hwnd != IntPtr.Zero) { GetWindowThreadProcessId(hwnd, out var pid); targetProcessId = unchecked((int)pid); }
+            var bothMethods = _passwordAppLockEnabled && _questionAppLockEnabled;
+            var questionOnly = !_passwordAppLockEnabled && _questionAppLockEnabled;
+            Func<string, bool> verify = bothMethods ? value => VerifyScreenAccessPassword(value) || VerifyScreenAccessAnswer(value)
+                : questionOnly ? VerifyScreenAccessAnswer : VerifyScreenAccessPassword;
+            var prompt = bothMethods ? $"Masukkan password atau jawaban keamanan: {_screenAccessQuestion}"
+                : questionOnly ? _screenAccessQuestion : "Masukkan password akses layar yang tersimpan di Pengaturan LaptopStatus.";
+            _userLockWindow = new UserLockWindow(verify, () =>
+            {
+                _authorizedForegroundProcessId = targetProcessId;
+            }, questionOnly ? "Jawab pertanyaan keamanan" : "LaptopStatus dikunci", prompt);
+            _userLockWindow.Closed += (_, _) => _userLockWindow = null;
+            _userLockWindow.Show();
+            _userLockWindow.Activate();
+        }
+
+        private bool CanUnlockApplication => (_passwordAppLockEnabled && _screenPasswordAccessEnabled) || (_questionAppLockEnabled && _screenAnswerHash.Length == 32);
+
         private async void SaveScreenAccess_Click(object sender, RoutedEventArgs e)
         {
             if (UnattendedAccessToggle.IsChecked != true)
@@ -1331,11 +1525,19 @@ namespace LaptopStatus
             ScreenAccessStatus.Text = "Membuat hash password yang aman...";
             try
             {
-                var settings = await Task.Run(() => CreateScreenAccessSettings(password));
+                var previous = new ScreenAccessSettings(true, Convert.ToBase64String(_screenAccessSalt), Convert.ToBase64String(_screenAccessHash),
+                    _loadedScreenPasswordIterations, null, _screenAccessQuestion,
+                    _screenAnswerSalt.Length == 16 ? Convert.ToBase64String(_screenAnswerSalt) : "",
+                    _screenAnswerHash.Length == 32 ? Convert.ToBase64String(_screenAnswerHash) : "", _screenAnswerIterations);
+                var settings = await Task.Run(() => CreateScreenAccessSettings(password, _pendingScreenAccessQuestion, _pendingScreenAccessAnswer, previous));
                 await Task.Run(() => PersistScreenAccessSettings(settings));
                 _screenAccessSalt = Convert.FromBase64String(settings.Salt);
                 _screenAccessHash = Convert.FromBase64String(settings.PasswordHash);
                 _loadedScreenPasswordIterations = settings.Iterations;
+                _screenAccessQuestion = settings.Question;
+                _screenAnswerSalt = string.IsNullOrEmpty(settings.AnswerSalt) ? Array.Empty<byte>() : Convert.FromBase64String(settings.AnswerSalt);
+                _screenAnswerHash = string.IsNullOrEmpty(settings.AnswerHash) ? Array.Empty<byte>() : Convert.FromBase64String(settings.AnswerHash);
+                _screenAnswerIterations = settings.AnswerIterations is >= 100000 and <= 1000000 ? settings.AnswerIterations : ScreenPasswordIterations;
                 _screenPasswordAccessEnabled = true;
                 _screenAccessPasswordForDisplay = password;
                 _screenAccessPasswordVisible = false;
@@ -1351,6 +1553,7 @@ namespace LaptopStatus
             finally
             {
                 ScreenAccessPasswordBox.Clear();
+                _pendingScreenAccessAnswer = "";
                 SaveScreenAccessButton.IsEnabled = true;
                 _ = PushClaudeNoticeAsync(ScreenAccessStatus.Text);
                 _ = PushClaudeStateAsync();
@@ -2257,6 +2460,17 @@ namespace LaptopStatus
                         }
                         break;
                     case "history:clear": ClearWindowsHistory_Click(this, new RoutedEventArgs()); await PushClaudeHistoryAsync(); break;
+                    case "rammap:run":
+                        if (root.TryGetProperty("ramAction", out var ramActionValue) && ramActionValue.GetString() is string requestedRamAction)
+                        {
+                            var actionItem = RamMapActionSelector.Items.OfType<ComboBoxItem>().FirstOrDefault(item => Equals(item.Tag?.ToString(), requestedRamAction));
+                            if (actionItem is not null)
+                            {
+                                RamMapActionSelector.SelectedItem = actionItem;
+                                RunRamMapAction_Click(this, new RoutedEventArgs());
+                            }
+                        }
+                        break;
                     case "settings:appearance":
                         if (root.TryGetProperty("animations", out var animations))
                         {
@@ -2307,6 +2521,26 @@ namespace LaptopStatus
                         ScreenAccessPasswordBox.Password = root.TryGetProperty("password", out var screenPassword) ? screenPassword.GetString() ?? "" : "";
                         SaveScreenAccess_Click(SaveScreenAccessButton, new RoutedEventArgs());
                         await PushClaudeNoticeAsync(ScreenAccessStatus.Text);
+                        break;
+                    case "app-lock:question:save":
+                        var appLockQuestion = root.TryGetProperty("question", out var qValue) ? qValue.GetString() ?? "" : "";
+                        var appLockAnswer = root.TryGetProperty("answer", out var aValue) ? aValue.GetString() ?? "" : "";
+                        await Task.Run(() => SaveScreenAccessQuestion(appLockQuestion, appLockAnswer));
+                        await PushClaudeStateAsync();
+                        await PushClaudeNoticeAsync("Pertanyaan dan jawaban keamanan tersimpan di laptop.");
+                        break;
+                    case "app-lock:toggle":
+                        SetApplicationLockEnabled(root.TryGetProperty("enabled", out var appLockEnabled) && appLockEnabled.GetBoolean());
+                        await PushClaudeNoticeAsync(_appLockEnabled ? "Kunci aplikasi aktif. Tiap aplikasi meminta password." : "Kunci aplikasi dimatikan.");
+                        await PushClaudeStateAsync();
+                        break;
+                    case "app-lock:password":
+                        SetApplicationLockMethodEnabled("password", root.TryGetProperty("enabled", out var passwordLock) && passwordLock.GetBoolean());
+                        await PushClaudeStateAsync();
+                        break;
+                    case "app-lock:question":
+                        SetApplicationLockMethodEnabled("question", root.TryGetProperty("enabled", out var questionLock) && questionLock.GetBoolean());
+                        await PushClaudeStateAsync();
                         break;
                 }
             }
@@ -2397,6 +2631,9 @@ namespace LaptopStatus
                 androidJoke = _androidJokeNotificationEnabled,
                 breakReminderEnabled = _breakReminderEnabled,
                 screenAccessEnabled = _screenPasswordAccessEnabled,
+                appLockEnabled = _appLockEnabled,
+                appLockPasswordEnabled = _passwordAppLockEnabled,
+                appLockQuestionEnabled = _questionAppLockEnabled,
                 jokeMessage = _jokeSettings.Message,
                 jokeColor = _jokeSettings.BackgroundHex,
                 jokeAnimation = jokeAnimationIndex,
@@ -3560,6 +3797,33 @@ namespace LaptopStatus
             if (sender is Button refreshButton) refreshButton.IsEnabled = true;
         }
 
+        private async void RunRamMapAction_Click(object sender, RoutedEventArgs e)
+        {
+            if (RamMapActionSelector.SelectedItem is not ComboBoxItem selected || selected.Tag is not string action) return;
+            var label = selected.Content?.ToString() ?? "Aksi memori";
+            var confirm = MessageBox.Show(
+                $"Jalankan {label}?\n\nWindows dapat memuat ulang halaman memori dan aplikasi lain mungkin terasa lambat sementara. LaptopStatus tidak akan meminta UAC. Aksi yang perlu izin administrator akan ditolak Windows.",
+                "Konfirmasi aksi RAMMap", MessageBoxButton.YesNo, MessageBoxImage.Warning, MessageBoxResult.No);
+            if (confirm != MessageBoxResult.Yes) return;
+
+            RunRamMapActionButton.IsEnabled = false;
+            RamMapActionStatus.Text = "Menjalankan aksi memori tanpa UAC…";
+            try
+            {
+                var message = await Task.Run(() => RamMapActions.Execute(action));
+                RamMapActionStatus.Text = message;
+                _ = PushClaudeNoticeAsync(message);
+                await RefreshMemoryDetailsAsync();
+                RecordWindowsHistory("Aksi RAMMap: " + action);
+            }
+            catch (Exception ex)
+            {
+                RamMapActionStatus.Text = ex.Message;
+                _ = PushClaudeNoticeAsync(ex.Message);
+            }
+            finally { RunRamMapActionButton.IsEnabled = true; }
+        }
+
         private async void KillProcess_Click(object sender, RoutedEventArgs e)
         {
             if (sender is not Button { Tag: int pid } button || button.DataContext is not ProcessInfo process) return;
@@ -4123,6 +4387,7 @@ namespace LaptopStatus
                     : method == "POST" && (path == "/api/shell/start"
                         || path.StartsWith("/api/shell/input?", StringComparison.Ordinal)
                         || path.StartsWith("/api/shell/stop?", StringComparison.Ordinal)) ? 16 * 1024
+                    : method == "POST" && path == "/api/app-lock/question" ? 4096
                     : 0;
                 if (contentLength < 0 || contentLength > maximumBodyBytes)
                 {
@@ -4471,6 +4736,13 @@ namespace LaptopStatus
                         logicalProcessors = Environment.ProcessorCount,
                         totalPhysicalMemoryBytes = GetTotalPhysicalMemoryBytes(), osArchitecture = RuntimeInformation.OSArchitecture.ToString(),
                         osVersion = Environment.OSVersion.VersionString,
+                        appLockEnabled = _appLockEnabled,
+                        appLockPasswordEnabled = _passwordAppLockEnabled,
+                        appLockQuestionEnabled = _questionAppLockEnabled,
+                        appLockMethod = _appLockMethod,
+                        appLockQuestionConfigured = _screenAnswerHash.Length == 32,
+                        appLockQuestion = _screenAccessQuestion,
+                        screenPasswordAccessEnabled = _screenPasswordAccessEnabled,
                         jokeActive = windowsJokeActive,
                         androidJokeTriggerActive,
                         androidJokeNotificationEnabled = _androidJokeNotificationEnabled,
@@ -4481,13 +4753,84 @@ namespace LaptopStatus
                             ? GetAndroidJokeIconBase64(_jokeSettings) : null,
                         androidJokeAnimation = _jokeSettings.Animation,
                         screenControlActive = _screenControlActive, screenControlPending = _screenControlPending,
-                        screenPasswordAccessEnabled = _screenPasswordAccessEnabled, screenPort = ScreenPort, updatedAt = DateTimeOffset.Now };
+                        screenPort = ScreenPort, updatedAt = DateTimeOffset.Now };
                     responseBytes = JsonSerializer.SerializeToUtf8Bytes(data);
                 }
                 else if (secure && method == "GET" && path == "/api/memory")
                 {
                     status = 200;
                     responseBytes = JsonSerializer.SerializeToUtf8Bytes(GetMemorySnapshot());
+                }
+                else if (secure && method == "POST" && path.StartsWith("/api/memory/action?", StringComparison.Ordinal))
+                {
+                    try
+                    {
+                        var action = QueryValue(path, "action");
+                        var message = await Task.Run(() => RamMapActions.Execute(action));
+                        status = 200;
+                        responseBytes = JsonSerializer.SerializeToUtf8Bytes(new { ok = true, message });
+                        await Dispatcher.InvokeAsync(() => RecordWindowsHistory("Aksi RAMMap: " + action));
+                    }
+                    catch (Exception ex)
+                    {
+                        status = ex is ArgumentException ? 400 : 501;
+                        responseBytes = JsonSerializer.SerializeToUtf8Bytes(new { error = "memory_action_failed", message = ex.Message });
+                    }
+                }
+                else if (secure && method == "POST" && path.StartsWith("/api/app-lock?", StringComparison.Ordinal))
+                {
+                    if (path.Contains("passwordEnabled=", StringComparison.Ordinal) && path.Contains("questionEnabled=", StringComparison.Ordinal))
+                    {
+                        var passwordEnabled = string.Equals(QueryValue(path, "passwordEnabled"), "true", StringComparison.OrdinalIgnoreCase);
+                        var questionEnabled = string.Equals(QueryValue(path, "questionEnabled"), "true", StringComparison.OrdinalIgnoreCase);
+                        if (passwordEnabled && !_screenPasswordAccessEnabled || questionEnabled && _screenAnswerHash.Length != 32)
+                        {
+                            status = 409;
+                            responseBytes = JsonSerializer.SerializeToUtf8Bytes(new { error = "credential_required", message = "Atur password atau pertanyaan keamanan untuk metode yang diaktifkan." });
+                        }
+                        else
+                        {
+                            await Dispatcher.InvokeAsync(() => SetApplicationLockStates(passwordEnabled, questionEnabled));
+                            status = 200;
+                            responseBytes = JsonSerializer.SerializeToUtf8Bytes(new { ok = true, enabled = _appLockEnabled, passwordEnabled, questionEnabled });
+                        }
+                    }
+                    else
+                    {
+                    var enabled = string.Equals(QueryValue(path, "enabled"), "true", StringComparison.OrdinalIgnoreCase);
+                    var requestedMethod = QueryValue(path, "method");
+                    var selectedMethod = requestedMethod == "question" ? "question" : "password";
+                    if (enabled && (selectedMethod == "question" ? _screenAnswerHash.Length != 32 : !_screenPasswordAccessEnabled))
+                    {
+                        status = 409;
+                        responseBytes = JsonSerializer.SerializeToUtf8Bytes(new { error = "credential_required", message = selectedMethod == "question" ? "Atur pertanyaan dan jawaban terlebih dahulu." : "Simpan password akses layar terlebih dahulu." });
+                    }
+                    else
+                    {
+                        await Dispatcher.InvokeAsync(() => { _appLockMethod = selectedMethod; SetApplicationLockEnabled(enabled); });
+                        status = 200;
+                        responseBytes = JsonSerializer.SerializeToUtf8Bytes(new { ok = true, enabled = _appLockEnabled, method = selectedMethod,
+                            passwordEnabled = _passwordAppLockEnabled, questionEnabled = _questionAppLockEnabled });
+                    }
+                    }
+                }
+                else if (secure && method == "POST" && path == "/api/app-lock/question")
+                {
+                    try
+                    {
+                        using var questionDocument = JsonDocument.Parse(requestBody);
+                        var question = questionDocument.RootElement.GetProperty("question").GetString() ?? "";
+                        var answer = questionDocument.RootElement.GetProperty("answer").GetString() ?? "";
+                        await Dispatcher.InvokeAsync(() => SaveScreenAccessQuestion(question, answer));
+                        await PushClaudeStateAsync();
+                        status = 200;
+                        responseBytes = JsonSerializer.SerializeToUtf8Bytes(new { ok = true, question, configured = true });
+                    }
+                    catch (Exception ex)
+                    {
+                        status = ex is InvalidOperationException ? 409 : 400;
+                        responseBytes = JsonSerializer.SerializeToUtf8Bytes(new { error = "question_save_failed", message = ex.Message });
+                    }
                 }
                 else if (secure && method == "GET" && path == "/api/schedule")
                 {
@@ -5436,7 +5779,7 @@ namespace LaptopStatus
             _processKillArmTimer?.Stop();
             _stop.Cancel();
             StopCloudflareTunnelRuntime();
-            _listener.Stop(); _screenListener.Stop(); _timer.Stop(); _screenSessionTimer.Stop(); _cpuCounter?.Dispose(); _stop.Dispose();
+            _listener.Stop(); _screenListener.Stop(); _timer.Stop(); _screenSessionTimer.Stop(); _appLockTimer.Stop(); _cpuCounter?.Dispose(); _stop.Dispose();
             _ = DisposeHardwareTelemetryAsync();
             _screenCertificate.Dispose();
             _trayRejectedStateTimer.Stop();

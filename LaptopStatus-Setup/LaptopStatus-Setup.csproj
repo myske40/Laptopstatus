@@ -20,10 +20,12 @@
     <FileVersion>$(LaptopStatusVersion).0</FileVersion>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <ApplicationIcon>..\LaptopStatus-WindowsApp\Assets\laptop-status.ico</ApplicationIcon>
+    <LaptopStatusPayloadPath Condition="'$(LaptopStatusPayloadPath)' == ''">payload\LaptopStatusPayload-$(LaptopStatusVersion)-signed.zip</LaptopStatusPayloadPath>
   </PropertyGroup>
   <ItemGroup>
+    <Compile Remove="bin\**\*.cs;obj\**\*.cs" />
     <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.2903.40" />
-    <EmbeddedResource Include="payload\LaptopStatusPayload-$(LaptopStatusVersion)-signed.zip" LogicalName="LaptopStatus.Payload.zip" />
+    <EmbeddedResource Include="$(LaptopStatusPayloadPath)" LogicalName="LaptopStatus.Payload.zip" />
     <EmbeddedResource Include="..\.build-tools\downloads\MicrosoftEdgeWebView2RuntimeInstallerX64.exe" LogicalName="LaptopStatus.WebView2RuntimeInstaller.exe" />
     <EmbeddedResource Include="Assets\WizardRef\Main.dc.html" LogicalName="LaptopStatus.Wizard.Main.dc.html" />
     <EmbeddedResource Include="Assets\WizardRef\support.js" LogicalName="LaptopStatus.Wizard.support.js" />

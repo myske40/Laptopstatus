@@ -1,5 +1,50 @@
 # Changelog
 
+## v1.18.24 — 2026-11-10
+
+Rilis fitur keamanan kunci aplikasi, pemulihan kontrol RAMMap Android, dan konsol debug LaptopStatus.
+
+### Keamanan aplikasi
+
+- Toggle kunci dengan password dan kunci dengan pertanyaan keamanan kini terpisah di Android dan Windows. Keduanya dapat diaktifkan sendiri-sendiri atau bersamaan.
+- Saat berpindah aplikasi, layar kunci meminta salah satu metode yang diaktifkan. Pengaturan tetap aktif setelah restart sampai kedua toggle dimatikan.
+- Pertanyaan dan jawaban dapat dibuat dari Android atau Windows. Jawaban disimpan sebagai hash bersalt di laptop.
+
+### RAMMap dan debug
+
+- Kontrol RAMMap lama dipulihkan di kartu Memori Android dan menjalankan aksi melalui koneksi aman tanpa meminta UAC. Windows tetap dapat menolak tindakan yang memerlukan elevasi.
+- Konsol Debug LaptopStatus menyediakan preset untuk status, memori, RAMMap, proses, jadwal, rutinitas, berbagi file, tampilan layar, dan tindakan lain melalui pairing TLS.
+
+### Versi dan berkas rilis
+
+- Android: 1.18.24
+- Windows: 2.11.64
+- Installer Windows: 2.11.64
+- Linux host: 0.1.0 (tidak berubah)
+- Berkas unduhan: APK Android, installer Windows, ZIP installer, Windows portable, konsol debug, dan source Linux.
+
+## v1.18.23 — 2026-11-10
+
+Perbaikan terbaru LaptopStatus lintas platform.
+
+### Windows 2.11.60
+
+- Memperbaiki animasi klik yang sebelumnya membuat lebar tombol berubah.
+- Memperbaiki pemuatan WebView installer dengan menyimpan UI di dalam installer, agar tidak gagal karena berkas sementara terkunci.
+- Memperbaiki kestabilan Statistik dan Rincian perangkat, merapikan troubleshooting, dan menambahkan detail proses serta memori.
+- Menambahkan konfirmasi penghentian proses dan pengingat istirahat.
+
+### Android 1.18.22
+
+- Menyertakan APK terbaru yang sudah ditandatangani dari build folder tugas.
+- Menambahkan tindakan konfirmasi untuk menutup LaptopStatus di PC dari Android.
+
+### Linux 0.1.0
+
+- Menyertakan ulang paket source host Linux terbaru dengan panduan Ubuntu, Debian, Fedora, dan Arch.
+
+Asset installer Windows, paket portable, APK Android, dan source Linux tersedia di bagian **Assets** di bawah changelog ini.
+
 ## v1.18.22 — 2026-11-04
 
 Rilis perbaikan crash dan pembaruan Statistik Windows 2.11.40 dengan installer Windows 2.13.28. Aplikasi Android 1.18.19 dan host Linux 0.1.0 tetap tersedia tanpa perubahan.

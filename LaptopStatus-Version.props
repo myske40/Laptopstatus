@@ -1,5 +1,5 @@
 <Project>
   <PropertyGroup>
-    <LaptopStatusVersion Condition="'$(LaptopStatusVersion)' == ''">2.11.60</LaptopStatusVersion>
+    <LaptopStatusVersion Condition="'$(LaptopStatusVersion)' == ''">2.11.64</LaptopStatusVersion>
   </PropertyGroup>
 </Project>
